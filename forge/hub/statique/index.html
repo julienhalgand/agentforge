@@ -8,7 +8,7 @@
 </head>
 <body>
 <header>
-  <h1>⚒ agentforge</h1>
+  <h1>agentforge</h1>
   <nav><a href="/" class="actif">Accueil</a><a href="/assembleur">Assembleur</a></nav>
   <div class="droite" id="barre-etat">…</div>
 </header>
@@ -18,12 +18,15 @@
   <div class="tuiles" id="pipelines"></div>
   <h2>Briques</h2>
   <div class="tuiles" id="briques"></div>
-  <h2>Vues composées <button class="discret" onclick="dialogueVue()">+ nouvelle vue</button></h2>
+  <h2>Vues composées <button class="discret" onclick="dialogueVue()">＋ nouvelle vue</button></h2>
   <div class="tuiles" id="vues"></div>
-  <h2>Journal de l'exécution en cours</h2>
-  <div class="journal" id="journal">—</div>
-  <h2>Contrats de données</h2>
-  <div id="contrats" class="tuiles"></div>
+  <details style="margin-top:28px">
+    <summary>Pour les développeurs : journal et contrats de données</summary>
+    <h2>Journal de l'exécution en cours</h2>
+    <div class="journal" id="journal">—</div>
+    <h2>Contrats de données</h2>
+    <div id="contrats" class="tuiles"></div>
+  </details>
 </main>
 
 <dialog id="dialogue-planification">
@@ -80,7 +83,7 @@ function rendre() {
   const pb = document.getElementById("problemes");
   pb.replaceChildren(...ETAT.problemes.map(p => el("div", { class: "probleme" }, p)));
   document.getElementById("barre-etat").textContent =
-    (ETAT.en_cours ? `en cours : ${ETAT.en_cours}` : "inactif") + (ETAT.en_file.length ? ` · en file : ${ETAT.en_file.join(", ")}` : "") + ` · ${ETAT.dossier_utilisateur}`;
+    (ETAT.en_cours ? `⏳ ${ETAT.en_cours.split(":")[1]} en cours` : "") + (ETAT.en_file.length ? ` · ${ETAT.en_file.length} en attente` : "");
   document.getElementById("pipelines").replaceChildren(...ETAT.pipelines.map(tuilePipeline), tuileNouveauPipeline());
   document.getElementById("briques").replaceChildren(...ETAT.briques.map(tuileBrique));
   document.getElementById("vues").replaceChildren(...ETAT.vues.map(v => el("div", { class: "tuile" },
@@ -125,14 +128,14 @@ function tuilePipeline(p) {
     ligneEtat(p),
     el("div", { class: "actions" },
       el("button", { class: "principal", onclick: () => executer(p.cible) }, "▶ Exécuter"),
-      el("a", { class: "bouton", href: `/pipeline/${p.nom}` }, "Ouvrir →"),
+      el("a", { class: "bouton", href: `/pipeline/${p.nom}` }, "Ouvrir ›"),
       ...(p.execution && p.execution.erreur ? [el("button", { onclick: () => detail(p.cible) }, "⚠ voir l'erreur")] : []),
     ));
 }
 
 function tuileNouveauPipeline() {
-  return el("div", { class: "tuile", style: "align-items:center;justify-content:center;border-style:dashed" },
-    el("a", { class: "bouton", href: "/assembleur" }, "+ Assembler un pipeline sans code"));
+  return el("div", { class: "tuile", style: "align-items:center;justify-content:center;box-shadow:none;background:transparent;border:2px dashed var(--bord)" },
+    el("a", { class: "bouton principal", href: "/assembleur" }, "＋ Assembler un pipeline"));
 }
 
 function tuileBrique(b) {
@@ -148,9 +151,9 @@ function tuileBrique(b) {
     el("button", { onclick: () => ouvrirEditeur(b.nom) }, "📝 Ouvrir dans l'éditeur"),
   ];
   if (!b.livree) options.push(el("button", { onclick: () => supprimer(b.nom) }, "🗑 Supprimer (corbeille)"));
-  actions.push(el("a", { class: "bouton", href: `/brique/${b.nom}` }, "Ouvrir →"));
+  actions.push(el("a", { class: "bouton", href: `/brique/${b.nom}` }, "Ouvrir ›"));
   return el("div", { class: "tuile cliquable", onclick: ouvrir(`/brique/${b.nom}`) },
-    el("div", { class: "tete" }, el("span", { class: "icone" }, b.icone), el("div", {}, el("div", { class: "nom" }, `${b.nom} ${b.version}`), el("div", { class: "type" }, `${b.type} · ${b.services.map(s => s.nom).join(", ")}`)), menu(...options)),
+    el("div", { class: "tete" }, el("span", { class: "icone" }, b.icone), el("div", {}, el("div", { class: "nom" }, `${b.nom} ${b.version}`), el("div", { class: "type" }, `${b.type} · ${b.services.length > 3 ? b.services.length + " services" : b.services.map(s => s.nom).join(", ")}`)), menu(...options)),
     el("div", { class: "desc" }, b.description),
     ligneEtat(b),
     el("div", { class: "actions" }, ...actions));

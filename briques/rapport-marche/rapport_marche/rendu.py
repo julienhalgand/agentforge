@@ -42,21 +42,21 @@ def graphique_svg(bougies: list[list[float]], largeur: int = 900, hauteur: int =
     largeur_barre = max(zone_l / n * 0.6, 1)
     for i, v in enumerate(volumes):
         h = (v / vmax) * zone_h * 0.25
-        barres.append(f'<rect x="{x(i) - largeur_barre / 2:.1f}" y="{marge_h + zone_h - h:.1f}" width="{largeur_barre:.1f}" height="{h:.1f}" fill="#4f7cac" opacity="0.45"/>')
+        barres.append(f'<rect x="{x(i) - largeur_barre / 2:.1f}" y="{marge_h + zone_h - h:.1f}" width="{largeur_barre:.1f}" height="{h:.1f}" fill="#007aff" opacity="0.35"/>')
     graduations = []
     for k in range(5):
         v = mini + (maxi - mini) * k / 4
-        graduations.append(f'<line x1="{marge_g}" y1="{y(v):.1f}" x2="{largeur - marge_d}" y2="{y(v):.1f}" stroke="#3a3f4b" stroke-width="1"/>')
+        graduations.append(f'<line x1="{marge_g}" y1="{y(v):.1f}" x2="{largeur - marge_d}" y2="{y(v):.1f}" stroke="#8e8e93" stroke-opacity="0.35" stroke-width="1"/>')
         graduations.append(f'<text x="{marge_g - 8}" y="{y(v) + 4:.1f}" text-anchor="end" font-size="11" fill="#9aa3b2">{_fmt(v)}</text>')
     dates = []
     for i, ancre in ((0, "start"), (n // 2, "middle"), (n - 1, "end")):
         dates.append(f'<text x="{x(i):.1f}" y="{hauteur - 12}" text-anchor="{ancre}" font-size="11" fill="#9aa3b2">{_date(int(bougies[i][0]))}</text>')
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {largeur} {hauteur}" width="100%" role="img" aria-label="Clôtures et volumes">'
-        f'<rect width="{largeur}" height="{hauteur}" fill="#11141a" rx="8"/>'
+        f'<rect width="{largeur}" height="{hauteur}" fill="transparent" rx="8"/>'
         + "".join(graduations)
         + "".join(barres)
-        + f'<polyline points="{points}" fill="none" stroke="#f2b134" stroke-width="2"/>'
+        + f'<polyline points="{points}" fill="none" stroke="#ff9f0a" stroke-width="2.5" stroke-linejoin="round"/>'
         + "".join(dates)
         + "</svg>"
     )
@@ -108,15 +108,18 @@ def page_html(titre: str, date: str, corps_markdown: str, svg: str) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(titre)} — {date}</title>
 <style>
-  :root {{ color-scheme: dark; --fond: #0b0d12; --carte: #151922; --texte: #e6e9ef; --sourd: #9aa3b2; --accent: #f2b134; --attention: #f2b134; --critique: #ff6b6b; --info: #7fb5ff; }}
-  body {{ margin: 0; padding: 24px 16px; background: var(--fond); color: var(--texte); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }}
-  main {{ max-width: 960px; margin: 0 auto; }}
-  h1 {{ font-size: 26px; margin: 0 0 4px; }} h2 {{ font-size: 18px; margin: 28px 0 10px; color: var(--accent); }}
+  :root {{ color-scheme: light dark; --fond: #f2f2f7; --carte: #ffffff; --texte: #1c1c1e; --sourd: #8e8e93; --sep: #e5e5ea; --accent: #007aff; --attention: #ff9f0a; --critique: #ff3b30; --info: #007aff; --graphe: #ffffff; }}
+  @media (prefers-color-scheme: dark) {{ :root {{ --fond: #000; --carte: #1c1c1e; --texte: #f2f2f7; --sourd: #8e8e93; --sep: #38383a; --accent: #0a84ff; --critique: #ff453a; --graphe: #1c1c1e; }} }}
+  body {{ margin: 0; padding: 24px 16px; background: var(--fond); color: var(--texte); font: 15px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif; }}
+  main {{ max-width: 900px; margin: 0 auto; }}
+  h1 {{ font-size: 28px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 4px; }} h2 {{ font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--sourd); margin: 26px 4px 8px; }}
   em {{ color: var(--sourd); }}
-  table {{ border-collapse: collapse; width: 100%; background: var(--carte); border-radius: 8px; overflow: hidden; }}
-  th, td {{ text-align: left; padding: 8px 12px; border-bottom: 1px solid #262b36; }} th {{ color: var(--sourd); font-weight: 600; }}
+  table {{ border-collapse: collapse; width: 100%; background: var(--carte); border-radius: 16px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.06); }}
+  th, td {{ text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--sep); }} tr:last-child td {{ border-bottom: 0; }} th {{ color: var(--sourd); font-weight: 600; font-size: 13px; }}
+  ul {{ background: var(--carte); border-radius: 16px; padding: 12px 16px 12px 34px; margin: 0; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.06); }}
   li strong.attention {{ color: var(--attention); }} li strong.critique {{ color: var(--critique); }} li strong.info {{ color: var(--info); }}
-  figure {{ margin: 0; background: var(--carte); padding: 12px; border-radius: 8px; }}
+  figure {{ margin: 0; background: var(--carte); padding: 12px; border-radius: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.06); }}
+  figure svg rect:first-child {{ fill: var(--graphe); }}
 </style>
 </head>
 <body><main>

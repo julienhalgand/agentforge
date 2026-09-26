@@ -4,32 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>modele-local</title>
+<link rel="stylesheet" href="/statique/style.css">
 <style>
-  :root { color-scheme: dark; }
-  body { margin: 0; padding: 18px; background: #0b0d12; color: #e6e9ef; font: 15px/1.5 system-ui, sans-serif; }
-  h1 { font-size: 18px; margin: 0 0 4px; } h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #9aa3b2; margin: 0 0 8px; }
-  p.sourd, small { color: #9aa3b2; font-size: 13px; }
-  label { display: block; font-size: 13px; color: #9aa3b2; margin: 8px 0 4px; }
-  input, select, textarea { background: #151922; color: #e6e9ef; border: 1px solid #262b36; border-radius: 8px; padding: 7px 9px; font: inherit; width: 100%; box-sizing: border-box; }
-  textarea { min-height: 90px; }
-  button { background: #1b2029; color: #e6e9ef; border: 1px solid #262b36; border-radius: 8px; padding: 7px 12px; font: inherit; cursor: pointer; margin-right: 6px; }
-  button.principal { background: #f2b134; color: #111; font-weight: 600; border-color: #f2b134; } button:disabled { opacity: .5; cursor: default; }
-  .carte { background: #151922; border: 1px solid #262b36; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
-  .etat { display: flex; align-items: center; gap: 10px; font-size: 17px; } .pastille { width: 12px; height: 12px; border-radius: 50%; background: #f2b134; flex: none; } .pastille.ok { background: #5ad17a; } .pastille.ko { background: #ff6b6b; } .pastille.en_cours { animation: pulse 1s infinite alternate; }
-  @keyframes pulse { from { opacity: .4 } to { opacity: 1 } }
-  .barre { height: 14px; background: #0b0d12; border: 1px solid #262b36; border-radius: 7px; overflow: hidden; margin: 10px 0 4px; } .barre div { height: 100%; background: #f2b134; width: 0; transition: width .4s; }
-  .erreur { background: #2a1a1a; border: 1px solid #5a2a2a; color: #ffb3b3; border-radius: 8px; padding: 10px; white-space: pre-wrap; font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
-  .reponse { background: #0b0d12; border: 1px solid #262b36; border-radius: 8px; padding: 12px; white-space: pre-wrap; }
-  details { margin-top: 10px; } summary { cursor: pointer; color: #9aa3b2; font-size: 13px; }
-  .grille { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; } @media (max-width: 700px) { .grille { grid-template-columns: 1fr; } }
+  body { padding: 0; }
+  .etat { }
 </style>
 </head>
-<body>
+<body class="page-brique">
 <h1>🧠 Modèle local</h1>
 <p class="sourd">Un modèle de langage qui tourne sur cette machine. Il se prépare tout seul la première fois (moteur ≈ 50 Mo + petit modèle ≈ 1 Go). Ensuite rien ne part sur internet, et tu choisis le modèle que tu veux ci-dessous.</p>
 
 <div class="carte">
-  <div class="etat"><span class="pastille" id="pastille"></span><strong id="etat-texte">…</strong></div>
+  <div class="grande-etat"><span class="pastille" id="pastille"></span><span id="etat-texte">…</span></div>
   <div class="barre" id="barre-conteneur"><div id="barre"></div></div>
   <small id="detail"></small>
   <div id="erreur" class="erreur" style="display:none;margin-top:8px"></div>
@@ -37,7 +23,7 @@
 </div>
 
 <div class="carte">
-  <h2>Essayer</h2>
+  <h3>Essayer</h3>
   <label>Consigne</label>
   <textarea id="consigne">Explique en trois phrases ce qu'est une moyenne mobile, pour un débutant.</textarea>
   <label>Faits (JSON, optionnel — ce que le modèle a le droit d'utiliser)</label>
@@ -47,14 +33,14 @@
 </div>
 
 <div class="carte">
-  <h2>Choisir le modèle</h2>
+  <h3>Choisir le modèle</h3>
   <p class="sourd" style="margin:0 0 8px">Le plus petit est installé tout seul pour que ça marche direct. Un clic sur un autre le télécharge et le rend actif.</p>
-  <div id="liste-modeles"></div>
+  <div id="liste-modeles" class="liste-groupee"></div>
   <small id="progres-modele"></small>
   <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="gpu" style="width:auto" onchange="choisirGPU()"> utiliser la carte graphique (GPU) — repli automatique sur le processeur si elle ne marche pas</label>
 </div>
 
-<details><summary>Avancé : serveur externe (Ollama, LM Studio…) ou arrêt du moteur</summary>
+<details style="margin:6px 4px 20px"><summary>Avancé : serveur externe (Ollama, LM Studio…) ou arrêt du moteur</summary>
   <div class="carte" style="margin-top:10px">
     <label>Backend</label><select id="backend"><option value="integre">moteur intégré (recommandé)</option><option value="ollama">ollama</option><option value="openai-compatible">openai-compatible</option></select>
     <label>URL locale</label><input id="backend-url" placeholder="http://localhost:11434">
@@ -106,7 +92,7 @@ function rendreListeModeles() {
   const conteneur = document.getElementById("liste-modeles");
   conteneur.replaceChildren(...(ETAT.catalogue || []).map(c => {
     const telecharge = ETAT.modeles.includes(c.nom), actif = c.nom === ETAT.modele_actif;
-    const ligne = document.createElement("div"); ligne.style.cssText = "display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #262b36";
+    const ligne = document.createElement("div"); ligne.className = "rangee";
     const texte = document.createElement("div"); texte.style.flex = "1"; texte.innerHTML = `<strong>${c.titre}</strong><br><small>≈ ${c.taille_go} Go${telecharge ? " · téléchargé" : ""}</small>`;
     const bouton = document.createElement("button");
     if (actif) { bouton.textContent = "✓ actif"; bouton.disabled = true; bouton.className = "principal"; }

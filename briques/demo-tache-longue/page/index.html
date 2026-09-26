@@ -4,23 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>demo-tache-longue</title>
+<link rel="stylesheet" href="/statique/style.css">
 <style>
-  :root { color-scheme: dark; }
-  body { margin: 0; padding: 18px; background: #0b0d12; color: #e6e9ef; font: 15px/1.5 system-ui, sans-serif; }
-  h1 { font-size: 18px; margin: 0 0 4px; } p.sourd { color: #9aa3b2; margin: 0 0 14px; font-size: 13px; }
-  label { display: block; font-size: 13px; color: #9aa3b2; margin: 8px 0 4px; }
-  input { background: #151922; color: #e6e9ef; border: 1px solid #262b36; border-radius: 8px; padding: 7px 9px; font: inherit; width: 160px; }
-  button { background: #1b2029; color: #e6e9ef; border: 1px solid #262b36; border-radius: 8px; padding: 7px 12px; font: inherit; cursor: pointer; margin-right: 6px; }
-  button.principal { background: #f2b134; color: #111; font-weight: 600; border-color: #f2b134; }
-  button:disabled { opacity: .5; cursor: default; }
-  .barre { height: 14px; background: #151922; border: 1px solid #262b36; border-radius: 7px; overflow: hidden; margin: 14px 0 6px; }
-  .barre div { height: 100%; background: #f2b134; width: 0; transition: width .3s; }
-  .etat { font-family: ui-monospace, Consolas, monospace; font-size: 13px; color: #9aa3b2; white-space: pre-wrap; }
-  .termine .barre div { background: #5ad17a; } .annule .barre div { background: #9aa3b2; } .echec .barre div { background: #ff6b6b; }
-  ul { padding-left: 18px; color: #9aa3b2; font-size: 13px; }
+  body { padding: 0; } input { width: 160px; }
+  .etat { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; color: var(--sourd); white-space: pre-wrap; margin-top: 6px; }
+  .termine .barre div { background: var(--ok); } .annule .barre div { background: var(--sourd-2); } .echec .barre div { background: var(--critique); }
+  ul { padding-left: 18px; color: var(--sourd); font-size: 14px; }
 </style>
 </head>
-<body>
+<body class="page-brique">
 <h1>⏳ Démonstration : tâche longue</h1>
 <p class="sourd">L'état vit sur le disque (<code>taches/&lt;nom&gt;.progres.json</code>). Rafraîchissez la page pendant le travail : rien n'est perdu. « Annuler » pose un drapeau que la tâche consulte à chaque bloc.</p>
 <div style="display:flex;gap:12px;align-items:end;flex-wrap:wrap">
@@ -33,7 +25,7 @@
   <div class="barre"><div id="remplissage"></div></div>
   <div class="etat" id="etat">aucune tâche suivie</div>
 </div>
-<h3 style="font-size:14px;color:#9aa3b2;margin-top:22px">Tâches connues sur le disque</h3>
+<h2>Tâches connues sur le disque</h2>
 <ul id="liste"></ul>
 <script>
 // La page est servie par le hub sous /pages/<brique>/ ; les API de tâches sont sous /taches/<brique>/…
