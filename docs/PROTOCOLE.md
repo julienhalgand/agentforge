@@ -168,6 +168,19 @@ refusée. Le manifeste d'un agent déclare `"modele": { "backend": "integre", "n
 l'essayer. Dans un pipeline, on branche la sortie d'une étape sur `faits` : le modèle ne voit que ce
 qu'on lui donne.
 
+## 6 ter. Créer et composer sans code
+
+`forge/creation.py`. Une phrase → `creer_brique` : le modèle local rend une spécification sous JSON
+contraint (`SCHEMA_BRIQUE` : nom, services, champs typés, contrat de sortie existant ou champs, un
+exemple d'entrée, et le corps d'une seule fonction `executer(entree)` par service). Le gabarit
+génère manifeste, module et serveur MCP. Validation sans exécuter (`valider_code` : syntaxe, imports
+dans `IMPORTS_AUTORISES`, pas d'`exec`/`eval`/`open`), puis **essai réel** de chaque service sur son
+exemple via le client MCP avec validation de la sortie par le contrat ; chaque échec repart au modèle
+en clair, 3 tours au plus ; installation dans `~/.agentforge/briques/<nom>` (l'ancienne va à la
+corbeille). `composer_pipeline` : catalogue des briques → pipeline sous `SCHEMA_PIPELINE`, vérifié
+par `pipeline.verifier`, 2 tours. Routes du hub : `POST /api/creer-brique` (tâche longue,
+`GET /api/creations/<id>`), `POST /api/composer`. Page : `/creer`.
+
 ## 7. Les erreurs
 
 Chaque échec dit **la cause et le remède**, élément par élément :

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import time
 import os
 import shutil
 import subprocess
@@ -39,6 +40,7 @@ from ..mcp.client import ClientMCP
 from ..utils.erreurs import ErreurForge
 from ..utils.fichiers import ecrire_json, lire_json
 from ..utils import taches as mod_taches
+from .. import creation as mod_creation
 from . import planificateur as mod_planificateur
 
 DOSSIER_STATIQUE = Path(__file__).resolve().parent / "statique"
@@ -229,6 +231,10 @@ class Requete(BaseHTTPRequestHandler):
                 return self._fichier(DOSSIER_STATIQUE / "index.html")
             if chemin == "/assembleur":
                 return self._fichier(DOSSIER_STATIQUE / "assembleur.html")
+            if chemin == "/creer":
+                return self._fichier(DOSSIER_STATIQUE / "creer.html")
+            if parties[:2] == ["api", "creations"] and len(parties) == 3:
+                return self._json(mod_taches.lire_etat(DOSSIER_CREATIONS, parties[2]))
             if parties[:1] == ["statique"] and len(parties) == 2:
                 return self._fichier(DOSSIER_STATIQUE / parties[1], DOSSIER_STATIQUE)
             if parties[:1] == ["vue"] and len(parties) == 2:
@@ -286,6 +292,23 @@ class Requete(BaseHTTPRequestHandler):
                 m = registre.trouver_brique(parties[1])
                 drapeau = mod_taches.poser_annulation(m.dossier_taches, parties[2])
                 return self._json({"ok": True, "drapeau": str(drapeau), "message": "drapeau posé ; la tâche s'arrête à la fin du bloc en cours"})
+            if chemin == "/api/creer-brique":
+                corps = self._corps_json()
+                phrase = (corps.get("phrase") or "").strip()
+                if len(phrase) < 8:
+                    raise ErreurForge("décris ce que la brique doit faire, en une phrase", "ex. « me donner la météo de Nantes pour 3 jours »")
+                identifiant = f"creation-{int(time.time())}"
+                threading.Thread(target=_creer_brique_en_tache, args=(identifiant, phrase), daemon=True).start()
+                return self._json({"ok": True, "id": identifiant})
+            if chemin == "/api/composer":
+                corps = self._corps_json()
+                phrase = (corps.get("phrase") or "").strip()
+                if len(phrase) < 8:
+                    raise ErreurForge("décris ce que le pipeline doit faire, en une phrase", "ex. « chaque matin, le prix du bitcoin et un rapport commenté »")
+                journal: list[str] = []
+                pipeline = mod_creation.composer_pipeline(phrase, _generer_json_modele, journal=journal.append)
+                fichier = mod_creation.enregistrer_pipeline(pipeline)
+                return self._json({"ok": True, "pipeline": pipeline, "fichier": str(fichier), "journal": journal})
             if parties[:2] == ["api", "lancer-tache"] and len(parties) == 4:
                 m = registre.trouver_brique(parties[2])
                 service = m.service(parties[3])
@@ -328,6 +351,33 @@ class Requete(BaseHTTPRequestHandler):
             self._json({"erreur": {"cause": f"route inconnue : {chemin}", "remede": ""}}, 404)
         except ErreurForge as exc:
             self._erreur(exc)
+
+
+DOSSIER_CREATIONS = registre.DOSSIER_UTILISATEUR / "creations"
+
+
+def _generer_json_modele(consigne: str, schema: dict, systeme: str):
+    """Le modèle local, vu comme une fonction : passe par la brique modele-local (qui se prépare seule si besoin)."""
+    m = registre.trouver_brique("modele-local")
+    with ClientMCP(m.commande_serveur(), m.dossier, delai_s=1800) as client:
+        return client.appeler("generer_json", {"consigne": consigne, "schema": schema, "systeme": systeme})["valeur"]
+
+
+def _creer_brique_en_tache(identifiant: str, phrase: str) -> None:
+    tache = mod_taches.Tache(DOSSIER_CREATIONS, identifiant)
+    tache.demarrer("le modèle réfléchit…")
+    etapes = []
+
+    def journal(message: str) -> None:
+        etapes.append(message)
+        tache.progres(min(90, 15 * len(etapes)), message, force=True)
+
+    try:
+        resultat = mod_creation.creer_brique(phrase, _generer_json_modele, journal=journal)
+        etat = tache.terminer(resultat["dossier"], etape=f"brique « {resultat['nom']} » créée et testée")
+        ecrire_json(DOSSIER_CREATIONS / f"{identifiant}.resultat.json", {**resultat, "journal": etapes}, sauvegarder=False)
+    except ErreurForge as exc:
+        tache.echouer(exc.texte())
 
 
 def _preparer_briques() -> None:

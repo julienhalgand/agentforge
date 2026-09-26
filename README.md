@@ -37,6 +37,15 @@ Sans accès à Binance/CoinGecko (ou pour un essai hors ligne) : `PRIX_AGENT_SOU
 | `docs/PROTOCOLE.md` | le protocole complet |
 | `tests/` | `python -m pytest` |
 
+## Créer et composer avec une phrase
+
+Page **Créer** du hub : « me donner la météo de Nantes pour 3 jours » → le modèle local remplit un
+gabarit de brique (JSON contraint, une fonction Python par service), agentforge vérifie (manifeste,
+contrats, syntaxe, imports limités à la bibliothèque standard), **l'exécute pour de vrai** sur son
+exemple, renvoie chaque échec au modèle (3 tours max) et l'installe : une tuile de plus sur l'accueil.
+« chaque matin, le prix du bitcoin et un rapport commenté » → un pipeline vérifié, planifié, ouvert
+dans l'assembleur. Une brique cassée n'est jamais installée en silence.
+
 ## Le hub
 
 `forge hub` ouvre http://localhost:8700 : une tuile par brique et par pipeline (état, planification,

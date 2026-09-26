@@ -106,6 +106,12 @@ class Tache:
                 etat = lire_json(self.fichier_progres)
                 if etat.get("erreur") and self.fichier_erreur.exists():
                     etat["erreur_texte"] = self.fichier_erreur.read_text(encoding="utf-8").strip()  # la cause, lisible sur place
+                resultat = self.dossier / f"{self.nom}.resultat.json"
+                if etat.get("etat") == "termine" and resultat.exists():
+                    try:
+                        etat["resultat_detail"] = lire_json(resultat)
+                    except (OSError, json.JSONDecodeError):
+                        pass
                 return etat
             except (OSError, json.JSONDecodeError):
                 pass
