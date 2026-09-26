@@ -55,7 +55,8 @@ async function charger() {
     el("div", { class: "etape" },
       el("div", { class: "tete" }, el("span", { class: "numero" }, String(i + 1)), el("strong", {}, e.id), el("a", { href: `/brique/${e.brique}`, class: "contrat" }, `${e.brique}.${e.service}`),
         ex.durees_s && ex.durees_s[e.id] !== undefined ? el("span", { class: "type", style: "margin-left:auto" }, `${ex.durees_s[e.id]} s`) : null),
-      el("div", { class: "type" }, Object.entries(e.entree || {}).map(([k, v]) => `${k} = ${typeof v === "string" ? v : JSON.stringify(v)}`).join(" · "))),
+      el("div", { class: "type" }, Object.entries(e.entree || {}).map(([k, v]) => `${k} = ${typeof v === "string" ? v : JSON.stringify(v)}`).join(" · ")),
+      resultatEtape(e, (ex.resultats || {})[e.id])),
   ]));
 
   const liste = document.getElementById("liste-rapports");
@@ -76,6 +77,24 @@ async function charger() {
     el("div", { class: "journal", style: "margin-top:8px" }, (ex.journal || []).join("\n") || "—"),
     ex.resultats ? el("details", { style: "margin-top:8px" }, el("summary", {}, "Résultats (JSON)"), el("pre", { class: "resultat" }, JSON.stringify(ex.resultats, null, 2))) : null);
 }
+// Le résultat de chaque étape, lisible sous elle : un texte s'affiche, un rapport se lie, le reste se déplie en JSON.
+function resultatEtape(e, r) {
+  if (r === undefined || r === null) return null;
+  const bloc = el("div", { style: "margin-top:10px" });
+  if (typeof r === "object" && typeof r.texte === "string") {
+    bloc.append(el("div", { class: "reponse", style: "background:var(--fond);border:1px solid var(--bord);border-radius:8px;padding:12px;white-space:pre-wrap" }, r.texte),
+      el("small", { class: "type" }, [r.modele ? `${r.modele}` : "", r.duree_s ? `${r.duree_s} s` : "", r.continuations ? `${r.continuations} continuation(s)` : ""].filter(Boolean).join(" · ")));
+  } else if (typeof r === "object" && r.html) {
+    bloc.append(el("a", { class: "bouton", href: `/rapports/${e.brique}/${r.html}`, target: "_blank" }, `📄 ${r.titre || r.html}`), r.resume ? el("div", { class: "type", style: "margin-top:6px" }, r.resume) : null);
+  } else if (typeof r === "string") {
+    bloc.append(el("div", { class: "reponse", style: "white-space:pre-wrap" }, r));
+  }
+  const manques = (r && r.manques) || [];
+  if (manques.length) bloc.append(el("div", { class: "probleme", style: "margin-top:6px" }, "Manques :\n" + manques.map(m => "  - " + m).join("\n")));
+  bloc.append(el("details", { style: "margin-top:6px" }, el("summary", { class: "type" }, "détail (JSON)"), el("pre", { class: "resultat" }, JSON.stringify(r, null, 2))));
+  return bloc;
+}
+
 async function executer() {
   try { const r = await api(`/api/executer/${P.cible}`, { method: "POST" }); if (!r.mise_en_file) alert(r.message); } catch (e) { alert(texteErreur(e)); }
   setTimeout(charger, 1500);
