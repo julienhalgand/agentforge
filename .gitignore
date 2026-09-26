@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# agentforge
+briques/*/rapports/
+.corbeille/
+.sauvegardes/
+*.progres.json
+*.erreur.txt
+*.annuler
+.env.local
