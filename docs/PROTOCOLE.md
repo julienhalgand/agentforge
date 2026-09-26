@@ -133,6 +133,27 @@ téléchargement vidéo) suit ce contrat, `forge://tache/progres@1` :
 
 Les plafonds se dimensionnent pour le cas réel (un livre de 300 pages) ; toute coupe est annoncée.
 
+Implémentation de référence : `forge.utils.taches.Tache` côté brique (`demarrer`, `progres`,
+`annulee`, `annuler`, `terminer`, `echouer`), routes du hub `GET /taches/<brique>/[<nom>]`,
+`POST /taches/<brique>/<nom>/annuler`, `POST /api/lancer-tache/<brique>/<service>` (le service
+bloquant est lancé dans un fil d'arrière-plan). La brique `briques/demo-tache-longue` et sa page
+`page/index.html` sont le modèle à copier pour `voix-agent`, `ocr-agent`, `video-agent`. Le manifeste
+déclare `"taches": "taches"` (dossier des fichiers de tâches) et `"duree_longue": true` sur le service.
+
+## 6 bis. Le modèle local, optionnel et ancré
+
+`forge.llm.ModeleLocal` parle à Ollama (`http://localhost:11434`, CPU ou GPU) ou à tout serveur
+« openai-compatible » **local** (llama.cpp, vLLM, LM Studio) ; une URL non locale est refusée. Le
+manifeste d'un agent déclare `"modele": { "backend": "ollama", "nom": "qwen2.5:7b", "gpu": true, "cpu_ok": true }`.
+
+- **ancré** : la brique fournit les faits dans le prompt et vérifie la sortie ; le modèle trie ou
+  rédige, les chiffres sont recopiés tels quels ;
+- **continuation automatique** : réponse coupée (`done_reason = length`) → « continue là où tu t'es
+  arrêté », recollé, jusqu'à 6 fois, puis erreur parlante (jamais de troncature silencieuse) ;
+- **extraction sous grammaire** : `generer_json(prompt, schema)` contraint la sortie au JSON Schema
+  (Ollama : `format`) et la valide avant de la rendre ;
+- `disponible()` dit si le serveur répond et si le modèle est tiré (`ollama pull …` sinon).
+
 ## 7. Les erreurs
 
 Chaque échec dit **la cause et le remède**, élément par élément :

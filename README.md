@@ -30,6 +30,8 @@ Sans accès à Binance/CoinGecko (ou pour un essai hors ligne) : `PRIX_AGENT_SOU
 | `contrats/` | les contrats de données partagés (`forge://serie-temporelle/ohlcv@1`, `marche/prix-comptant@1`, `document/rapport@1`, `tache/progres@1`, `planification/planification@1`) |
 | `briques/prix-agent` | brique modèle au protocole existant « `python -m agent.<service>` → JSON, codes 0/1/2 », exposée en MCP **sans être réécrite** par l'adaptateur |
 | `briques/rapport-marche` | agent **sans LLM** : mesures calculées en code, rapport `.md` + `.html` (mode sombre) + graphique SVG |
+| `briques/demo-tache-longue` | modèle du pattern **tâche longue** : progrès sur disque, annulation coopérative, page interactive qui survit au rafraîchissement |
+| `forge/llm.py` | modèle **local** optionnel (Ollama / serveur openai-compatible) : ancré, continuation automatique, JSON sous schéma |
 | `pipelines/` | `rapport-btc-quotidien.json` : les deux briques reliées, planifié tous les jours à 08:15 |
 | `docs/PROTOCOLE.md` | le protocole complet |
 | `tests/` | `python -m pytest` |
