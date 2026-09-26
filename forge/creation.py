@@ -321,6 +321,8 @@ def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: in
         except ErreurForge as exc:
             dernier_probleme = exc.texte()
             journal(f"réponse inutilisable : {exc.cause}")
+            for d in exc.details[:4]:
+                journal("  → " + d[:700])
             continue
         journal(f"proposition reçue : « {spec.get('nom', '?')} », {len(spec.get('services', []))} service(s)" + (", une page interactive" if spec.get("page") else ""))
         temporaire = Path(tempfile.mkdtemp(prefix="brique-", dir=str(registre.DOSSIER_UTILISATEUR)))

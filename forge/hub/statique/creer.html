@@ -37,7 +37,10 @@
     <div class="actions" style="margin-top:12px"><button class="principal" id="demander" onclick="demander()">C'est parti</button><button id="annuler" onclick="annuler()" style="display:none">■ Annuler</button><small id="etat"></small></div>
     <small id="avertissement" style="display:none;margin-top:6px">Ça recommence jusqu'à réussir : chaque erreur est renvoyée au modèle, tour après tour, tant que tu n'annules pas. Avec le petit modèle par défaut, chaque tour peut prendre plusieurs minutes sur processeur. Pour aller plus vite et mieux : un modèle 3B ou 7B dans <a href="/brique/modele-local">Modèle local</a>.</small>
     <div class="barre" id="barre-creation" style="display:none"><div id="barre"></div></div>
-    <div class="journal" id="journal-direct" style="display:none;margin-top:10px"></div>
+    <div id="bloc-journal" style="display:none;margin-top:10px">
+      <div class="actions" style="justify-content:flex-end;margin-bottom:6px"><button class="discret" onclick="copierJournal()">⧉ Copier le journal</button></div>
+      <div class="journal" id="journal-direct" style="max-height:340px"></div>
+    </div>
     <div id="retour" style="margin-top:10px"></div>
   </div>
 </main>
@@ -83,7 +86,8 @@ async function suivre() {
   if (!creationEnCours) return;
   const t = await api(`/api/creations/${creationEnCours}`);
   const bouton = document.getElementById("demander"), etat = document.getElementById("etat"), retour = document.getElementById("retour"), barre = document.getElementById("barre-creation");
-  const direct = document.getElementById("journal-direct");
+  const direct = document.getElementById("journal-direct"), blocJournal = document.getElementById("bloc-journal");
+  blocJournal.style.display = t.etat === "en_cours" ? "" : "none";
   document.getElementById("annuler").style.display = t.etat === "en_cours" ? "" : "none";
   document.getElementById("avertissement").style.display = t.etat === "en_cours" ? "block" : "none";
   if (t.etat === "annule") {
@@ -107,14 +111,20 @@ async function suivre() {
     bouton.disabled = false; barre.style.display = "none"; etat.textContent = ""; direct.style.display = "none";
     const d = t.resultat_detail || {};
     retour.replaceChildren(...resultatTermine(t),
-      (t.journal || d.journal) ? el("details", { style: "margin-top:8px" }, el("summary", {}, "ce qui s'est passé"), el("div", { class: "journal" }, (t.journal || d.journal).join("\n"))) : null);
+      (t.journal || d.journal) ? el("details", { style: "margin-top:8px", open: "" }, el("summary", {}, "ce qui s'est passé"), el("button", { class: "discret", onclick: (ev) => { navigator.clipboard.writeText((t.journal || d.journal).join("\n")); ev.target.textContent = "✓ copié"; } }, "⧉ Copier"), el("div", { class: "journal" }, (t.journal || d.journal).join("\n"))) : null);
     localStorage.removeItem("creation-en-cours"); creationEnCours = null;
   } else if (t.etat === "echec") {
     bouton.disabled = false; barre.style.display = "none"; etat.textContent = ""; direct.style.display = "none";
     retour.replaceChildren(el("div", { class: "erreur" }, t.erreur_texte || t.etape),
-      t.journal ? el("details", { style: "margin-top:8px" }, el("summary", {}, "ce qui s'est passé"), el("div", { class: "journal" }, t.journal.join("\n"))) : null);
+      el("button", { class: "discret", onclick: (ev) => { navigator.clipboard.writeText((t.erreur_texte || t.etape) + "\n\n" + (t.journal || []).join("\n")); ev.target.textContent = "✓ copié"; } }, "⧉ Copier l'erreur et le journal"),
+      t.journal ? el("details", { style: "margin-top:8px", open: "" }, el("summary", {}, "ce qui s'est passé"), el("div", { class: "journal" }, t.journal.join("\n"))) : null);
     localStorage.removeItem("creation-en-cours"); creationEnCours = null;
   }
+}
+async function copierJournal() {
+  const texte = document.getElementById("journal-direct").textContent;
+  try { await navigator.clipboard.writeText(texte); } catch (_) { const z = document.createElement("textarea"); z.value = texte; document.body.append(z); z.select(); document.execCommand("copy"); z.remove(); }
+  const b = document.querySelector("#bloc-journal button"); b.textContent = "✓ copié"; setTimeout(() => b.textContent = "⧉ Copier le journal", 1500);
 }
 async function annuler() { if (creationEnCours) await api(`/api/creations/${creationEnCours}/annuler`, { method: "POST" }); }
 suivre(); setInterval(suivre, 1500);

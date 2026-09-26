@@ -41,6 +41,7 @@ class ModeleLocal:
         self.gpu = configuration.get("gpu", True)
         self.delai_s = delai_s
         self.max_continuations = max_continuations
+        self.derniere_raison_arret = "?"
         if self.backend not in URLS_PAR_DEFAUT:
             raise ErreurForge(f"backend inconnu : {self.backend}", "utilisez « integre » (llama.cpp embarqué), « ollama » ou « openai-compatible »")
         if self.backend == "integre":
@@ -134,7 +135,10 @@ class ModeleLocal:
         try:
             valeur = json.loads(_extraire_json(texte))
         except json.JSONDecodeError as exc:
-            raise ErreurForge(f"le modèle n'a pas rendu un JSON valide ({exc.msg})", "réessayez avec un schéma plus simple", [texte[:300]]) from exc
+            details = [f"longueur de la réponse : {len(texte)} caractères", f"arrêt du moteur : {self.derniere_raison_arret}", "réponse brute : " + (repr(texte[:600]) if texte else "(vide)")]
+            if not texte:
+                details.append("réponse vide : le moteur n'a rien produit — grammaire JSON trop stricte pour ce modèle, contexte saturé, ou modèle qui refuse le format")
+            raise ErreurForge(f"le modèle n'a pas rendu un JSON valide ({exc.msg})", "voir la réponse brute ci-dessous", details) from exc
         ecarts = schemas.ecarts(valeur, schema_resolu)
         if ecarts:
             raise ErreurForge("le JSON du modèle ne respecte pas le schéma", "la brique doit refuser cette sortie ou réessayer", ecarts)
@@ -154,7 +158,8 @@ class ModeleLocal:
             d = self._post("/api/chat", corps)
             if "error" in d:
                 raise ErreurForge(f"Ollama : {d['error']}", f"vérifiez le modèle (ollama pull {self.nom}) et la mémoire disponible")
-            return d.get("message", {}).get("content", ""), d.get("done_reason") == "length"
+            self.derniere_raison_arret = str(d.get("done_reason"))
+            return d.get("message", {}).get("content", "") or "", d.get("done_reason") == "length"
         corps = {"model": self.nom, "messages": messages, "temperature": temperature}
         if max_tokens:
             corps["max_tokens"] = max_tokens
@@ -162,7 +167,8 @@ class ModeleLocal:
             corps["response_format"] = {"type": "json_schema", "json_schema": {"name": "sortie", "schema": format_json}}
         d = self._post("/v1/chat/completions", corps)
         choix = (d.get("choices") or [{}])[0]
-        return choix.get("message", {}).get("content", ""), choix.get("finish_reason") == "length"
+        self.derniere_raison_arret = f"{choix.get('finish_reason')} · tokens {d.get('usage', {}).get('completion_tokens', '?')}"
+        return choix.get("message", {}).get("content", "") or "", choix.get("finish_reason") == "length"
 
     def _get(self, chemin: str) -> dict:
         return self._requete("GET", chemin)
