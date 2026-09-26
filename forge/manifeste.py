@@ -94,7 +94,7 @@ SCHEMA_MANIFESTE = {
             "type": "object",
             "required": ["backend", "nom"],
             "properties": {
-                "backend": {"enum": ["ollama", "openai-compatible"]},
+                "backend": {"enum": ["integre", "ollama", "openai-compatible"]},
                 "nom": {"type": "string"},
                 "url": {"type": "string"},
                 "gpu": {"type": "boolean"},

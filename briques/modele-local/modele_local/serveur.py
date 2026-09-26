@@ -1,8 +1,9 @@
-"""modele-local : le modèle de langage local comme une brique MCP.
+"""modele-local : le modèle de langage local comme une brique MCP, avec son moteur intégré.
 
-Le modèle actif est mémorisé dans `modele.json` à côté du manifeste (écrit
-par la page ou par `choisir_modele`), le manifeste donne les valeurs par
-défaut. Le téléchargement d'un modèle suit le pattern tâche longue.
+Rien à installer à part : la brique télécharge llama.cpp et un modèle GGUF
+depuis sa page, lance le moteur elle-même sur 127.0.0.1 et s'en sert.
+Le modèle actif et le choix GPU sont mémorisés dans `modele.json`.
+Backend « ollama » ou « openai-compatible » possible pour qui en a déjà un.
 """
 
 from __future__ import annotations
@@ -17,6 +18,8 @@ from forge.mcp.serveur import ServeurMCP
 from forge.utils.erreurs import ErreurForge
 from forge.utils.fichiers import ecrire_json, lire_json
 from forge.utils.taches import Tache
+
+from . import moteur as mod_moteur
 
 DOSSIER = Path(__file__).resolve().parent.parent
 FICHIER_CONFIG = DOSSIER / "modele.json"
@@ -40,55 +43,126 @@ def configuration() -> dict:
     return defaut
 
 
-def modele(nom: str | None = None) -> ModeleLocal:
+def enregistrer_configuration(**champs) -> dict:
+    c = {**configuration(), **champs}
+    ecrire_json(FICHIER_CONFIG, {k: c[k] for k in ("backend", "nom", "url", "gpu") if k in c})
+    return c
+
+
+def modele_pret(nom: str | None = None) -> ModeleLocal:
+    """Un ModeleLocal prêt à générer : pour le backend intégré, démarre le moteur s'il le faut."""
     c = configuration()
     if nom:
         c = {**c, "nom": nom}
-    return ModeleLocal(c)
+    if c.get("backend", "integre") == "integre":
+        if not c.get("nom"):
+            raise ErreurForge("aucun modèle choisi", "ouvrez la page de la brique modele-local : installez le moteur, téléchargez un modèle")
+        info = mod_moteur.demarrer_serveur(c["nom"], bool(c.get("gpu", True)))
+        return ModeleLocal({"backend": "integre", "nom": c["nom"], "url": mod_moteur._url(info["port"]), "gpu": c.get("gpu", True)})
+    m = ModeleLocal(c)
+    pret, explication = m.disponible()
+    if not pret:
+        raise ErreurForge(f"modèle non disponible : {explication}", "ouvrez la page de la brique modele-local")
+    return m
 
 
 serveur = ServeurMCP("modele-local", "0.1.0")
 
 
-@serveur.service("etat", "État du serveur de modèles et du modèle actif.", entree={"type": "object"}, sortie={"type": "object"})
+@serveur.service("etat", "Moteur, modèles, serveur : où en est-on ?", entree={"type": "object"}, sortie={"type": "object"})
 def etat(_entree: dict) -> dict:
     c = configuration()
-    m = modele()
+    backend = c.get("backend", "integre")
+    base = {"backend": backend, "modele_actif": c.get("nom", ""), "gpu": bool(c.get("gpu", True)), "plateforme": "/".join(mod_moteur.plateforme()), "catalogue": [{"nom": k, **v} for k, v in mod_moteur.CATALOGUE.items()]}
+    if backend == "integre":
+        moteur = mod_moteur.moteur_installe()
+        modeles = mod_moteur.modeles_installes()
+        en_marche = mod_moteur.serveur_en_marche()
+        pret = bool(moteur) and any(m["nom"] == c.get("nom") for m in modeles)
+        if not moteur:
+            explication = "le moteur n'est pas encore installé (un seul téléchargement, ≈ 20 à 80 Mo)"
+        elif not modeles:
+            explication = "aucun modèle téléchargé"
+        elif not pret:
+            explication = "choisissez un modèle parmi ceux téléchargés"
+        else:
+            explication = "prêt" + (" — moteur en marche" if en_marche else " — le moteur démarrera à la première demande")
+        return {**base, "moteur": moteur, "modeles": [m["nom"] for m in modeles], "modeles_detail": modeles, "serveur": en_marche, "pret": pret, "explication": explication}
+    m = ModeleLocal(c)
     try:
         modeles = m.modeles()
-        joignable = True
+        pret, explication = m.disponible()
+        return {**base, "url": m.url, "joignable": True, "modeles": modeles, "pret": pret, "explication": explication}
     except ErreurForge as exc:
-        return {"backend": m.backend, "url": m.url, "joignable": False, "modeles": [], "modele_actif": c.get("nom", ""), "pret": False, "gpu": bool(c.get("gpu", True)),
-                "explication": exc.cause + " — " + exc.remede}
-    pret, explication = m.disponible()
-    return {"backend": m.backend, "url": m.url, "joignable": joignable, "modeles": modeles, "modele_actif": c.get("nom", ""), "pret": pret, "gpu": bool(c.get("gpu", True)), "explication": explication}
+        return {**base, "url": m.url, "joignable": False, "modeles": [], "pret": False, "explication": exc.cause + " — " + exc.remede}
 
 
-@serveur.service("choisir_modele", "Rend un modèle actif.", entree={"type": "object", "required": ["nom"]}, sortie={"type": "object"})
-def choisir_modele(entree: dict) -> dict:
-    c = configuration()
-    nouveau = {"nom": entree["nom"], "gpu": bool(entree.get("gpu", c.get("gpu", True)))}
-    ecrire_json(FICHIER_CONFIG, nouveau)
-    return {"modele_actif": nouveau["nom"], "gpu": nouveau["gpu"]}
+@serveur.service("installer_moteur", "Télécharge et installe le moteur llama.cpp (tâche longue).", entree={"type": "object"}, sortie="forge://tache/progres@1")
+def installer_moteur(entree: dict) -> dict:
+    gpu = bool(entree.get("gpu", configuration().get("gpu", True)))
+    tache = Tache(DOSSIER_TACHES, "moteur")
+    tache.demarrer("installation du moteur")
+    try:
+        info = mod_moteur.installer_moteur(gpu, progres=tache.progres, annulee=tache.annulee)
+    except ErreurForge as exc:
+        return tache.echouer(exc.texte())
+    if tache.annulee():
+        return tache.annuler("installation interrompue")
+    enregistrer_configuration(backend="integre", gpu=gpu)
+    return tache.terminer(info["executable"], etape=f"moteur {info['version']} installé")
 
 
-@serveur.service("installer_modele", "Télécharge un modèle (tâche longue).", entree={"type": "object", "required": ["nom"]}, sortie="forge://tache/progres@1")
+@serveur.service("installer_modele", "Télécharge un modèle GGUF (tâche longue, reprise possible).", entree={"type": "object", "required": ["nom"]}, sortie="forge://tache/progres@1")
 def installer_modele(entree: dict) -> dict:
     nom = entree["nom"]
     tache = Tache(DOSSIER_TACHES, nom.replace(":", "_").replace("/", "_"))
     tache.demarrer(f"téléchargement de {nom}")
-    m = modele()
     try:
-        m.installer(nom, progres=lambda pct, etape: tache.progres(pct, etape), annulee=tache.annulee)
+        if configuration().get("backend", "integre") == "integre":
+            fichier = mod_moteur.telecharger_modele(nom, progres=tache.progres, annulee=tache.annulee, url=entree.get("url"))
+            if not configuration().get("nom") or not (mod_moteur.DOSSIER_MODELES / f"{configuration()['nom']}.gguf").exists():
+                enregistrer_configuration(nom=nom)  # aucun modèle actif utilisable → celui-ci
+            return tache.terminer(str(fichier), etape=f"{nom} téléchargé")
+        m = ModeleLocal(configuration())
+        m.installer(nom, progres=tache.progres, annulee=tache.annulee)
+        if tache.annulee():
+            return tache.annuler("téléchargement interrompu")
+        if not configuration().get("nom"):
+            enregistrer_configuration(nom=nom)
+        return tache.terminer(etape=f"{nom} installé")
     except ErreurForge as exc:
         return tache.echouer(exc.texte())
-    if tache.annulee():
-        return tache.annuler("téléchargement interrompu (les parties reçues sont conservées par Ollama)")
-    actif = configuration().get("nom", "")
-    installes = m.modeles()
-    if not actif or (actif not in installes and f"{actif}:latest" not in installes):
-        ecrire_json(FICHIER_CONFIG, {**configuration(), "nom": nom})  # aucun modèle actif utilisable → celui-ci
-    return tache.terminer(etape=f"{nom} installé")
+
+
+@serveur.service("choisir_modele", "Rend un modèle actif (et le choix CPU/GPU).", entree={"type": "object", "required": ["nom"]}, sortie={"type": "object"})
+def choisir_modele(entree: dict) -> dict:
+    c = enregistrer_configuration(nom=entree["nom"], gpu=bool(entree.get("gpu", configuration().get("gpu", True))))
+    if c.get("backend", "integre") == "integre" and mod_moteur.serveur_en_marche():
+        mod_moteur.arreter_serveur()  # le prochain appel relancera le moteur avec ce modèle
+    return {"modele_actif": c["nom"], "gpu": c["gpu"]}
+
+
+@serveur.service("demarrer", "Démarre le moteur intégré avec le modèle actif.", entree={"type": "object"}, sortie={"type": "object"})
+def demarrer(_entree: dict) -> dict:
+    c = configuration()
+    if c.get("backend", "integre") != "integre":
+        raise ErreurForge("le backend n'est pas le moteur intégré", "rien à démarrer ici")
+    info = mod_moteur.demarrer_serveur(c.get("nom", ""), bool(c.get("gpu", True)))
+    return {"port": info["port"], "modele": info["modele"], "gpu": info["gpu"], "pid": info["pid"]}
+
+
+@serveur.service("arreter", "Arrête le moteur intégré (libère la mémoire).", entree={"type": "object"}, sortie={"type": "object"})
+def arreter(_entree: dict) -> dict:
+    return {"arrete": mod_moteur.arreter_serveur()}
+
+
+@serveur.service("configurer_backend", "Utiliser un autre serveur de modèles déjà présent (ollama, openai-compatible) ou revenir au moteur intégré.", entree={"type": "object", "required": ["backend"]}, sortie={"type": "object"})
+def configurer_backend(entree: dict) -> dict:
+    champs = {"backend": entree["backend"]}
+    if entree.get("url"):
+        champs["url"] = entree["url"]
+    c = enregistrer_configuration(**champs)
+    return {"backend": c["backend"], "url": c.get("url")}
 
 
 def _prompt(entree: dict) -> str:
@@ -100,10 +174,7 @@ def _prompt(entree: dict) -> str:
 
 @serveur.service("generer", "Rédige un texte ancré sur les faits fournis.", entree={"type": "object", "required": ["consigne"]}, sortie="forge://texte/generation@1")
 def generer(entree: dict) -> dict:
-    m = modele(entree.get("modele"))
-    pret, explication = m.disponible()
-    if not pret:
-        raise ErreurForge(f"modèle non disponible : {explication}", "ouvrez la page de la brique modele-local pour installer ou choisir un modèle")
+    m = modele_pret(entree.get("modele"))
     debut = time.time()
     texte = m.generer(_prompt(entree), systeme=entree.get("systeme", SYSTEME_PAR_DEFAUT), temperature=float(entree.get("temperature", 0.0)), max_tokens=entree.get("max_tokens"))
     return {"texte": texte, "modele": m.nom, "backend": m.backend, "continuations": getattr(m, "dernieres_continuations", 0), "duree_s": round(time.time() - debut, 2)}
@@ -111,10 +182,7 @@ def generer(entree: dict) -> dict:
 
 @serveur.service("generer_json", "Sortie JSON contrainte par un schéma.", entree={"type": "object", "required": ["consigne", "schema"]}, sortie={"type": "object", "required": ["valeur", "modele"]})
 def generer_json(entree: dict) -> dict:
-    m = modele(entree.get("modele"))
-    pret, explication = m.disponible()
-    if not pret:
-        raise ErreurForge(f"modèle non disponible : {explication}", "ouvrez la page de la brique modele-local pour installer ou choisir un modèle")
+    m = modele_pret(entree.get("modele"))
     valeur = m.generer_json(_prompt(entree), entree["schema"], systeme=entree.get("systeme", SYSTEME_PAR_DEFAUT))
     return {"valeur": valeur, "modele": m.nom, "backend": m.backend}
 

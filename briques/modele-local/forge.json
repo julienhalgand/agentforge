@@ -2,44 +2,65 @@
   "forge": 1,
   "type": "application",
   "nom": "modele-local",
-  "version": "0.1.0",
-  "description": "Modèle de langage local (Ollama, CPU ou GPU) exposé comme une brique : choisir et télécharger un modèle depuis la page, générer du texte ou du JSON sous schéma, brancher dans un pipeline. Zéro cloud, zéro clé.",
+  "version": "0.2.0",
+  "description": "Modèle de langage local avec son moteur intégré : la brique télécharge llama.cpp et un modèle depuis sa page, les lance elle-même (CPU ou GPU) et génère du texte ou du JSON sous schéma. Rien à installer à part, zéro cloud, zéro clé.",
   "icone": "🧠",
   "interpreteur": "python",
   "transport": { "type": "mcp-stdio", "commande": ["-m", "modele_local.serveur"] },
   "page": "page/index.html",
   "taches": "taches",
-  "modele": { "backend": "ollama", "nom": "qwen2.5:3b", "url": "http://localhost:11434", "gpu": true, "cpu_ok": true },
+  "modele": { "backend": "integre", "nom": "", "gpu": true, "cpu_ok": true },
   "services": [
     {
       "nom": "etat",
-      "description": "Le serveur de modèles répond-il ? Quels modèles sont installés ? Lequel est actif ?",
+      "description": "Moteur installé ? modèles téléchargés ? modèle actif ? moteur en marche ?",
       "entree": { "type": "object", "properties": {} },
-      "sortie": {
-        "type": "object",
-        "required": ["backend", "url", "joignable", "modeles", "modele_actif", "pret"],
-        "properties": {
-          "backend": { "type": "string" }, "url": { "type": "string" }, "joignable": { "type": "boolean" },
-          "modeles": { "type": "array", "items": { "type": "string" } }, "modele_actif": { "type": "string" },
-          "pret": { "type": "boolean" }, "explication": { "type": "string" }, "gpu": { "type": "boolean" }
-        }
-      },
+      "sortie": { "type": "object", "required": ["backend", "modele_actif", "pret"], "properties": { "backend": { "type": "string" }, "modele_actif": { "type": "string" }, "pret": { "type": "boolean" }, "explication": { "type": "string" }, "modeles": { "type": "array" } } },
       "exemple": {}
     },
     {
-      "nom": "choisir_modele",
-      "description": "Rend un modèle installé actif pour les prochaines générations (mémorisé dans modele.json).",
-      "entree": { "type": "object", "required": ["nom"], "properties": { "nom": { "type": "string" }, "gpu": { "type": "boolean" } } },
-      "sortie": { "type": "object", "required": ["modele_actif"], "properties": { "modele_actif": { "type": "string" }, "gpu": { "type": "boolean" } } },
-      "exemple": { "nom": "qwen2.5:3b" }
+      "nom": "installer_moteur",
+      "description": "Télécharge et installe le moteur llama.cpp (une fois ; CPU, ou Vulkan pour le GPU). Tâche longue.",
+      "duree_longue": true,
+      "entree": { "type": "object", "properties": { "gpu": { "type": "boolean", "description": "Prendre la variante GPU (Vulkan : NVIDIA, AMD, Intel)" } } },
+      "sortie": "forge://tache/progres@1",
+      "exemple": { "gpu": true }
     },
     {
       "nom": "installer_modele",
-      "description": "Télécharge un modèle depuis la bibliothèque Ollama (tâche longue : progrès dans taches/<nom>.progres.json, annulable).",
+      "description": "Télécharge un modèle du catalogue (fichier GGUF, reprise si interrompu). Tâche longue.",
       "duree_longue": true,
-      "entree": { "type": "object", "required": ["nom"], "properties": { "nom": { "type": "string", "description": "ex. qwen2.5:3b, llama3.2:3b, mistral:7b" } } },
+      "entree": { "type": "object", "required": ["nom"], "properties": { "nom": { "type": "string", "enum": ["qwen2.5-1.5b", "qwen2.5-3b", "qwen2.5-7b", "llama-3.2-3b", "mistral-7b"] }, "url": { "type": "string", "description": "URL directe d'un .gguf si hors catalogue" } } },
       "sortie": "forge://tache/progres@1",
-      "exemple": { "nom": "qwen2.5:3b" }
+      "exemple": { "nom": "qwen2.5-3b" }
+    },
+    {
+      "nom": "choisir_modele",
+      "description": "Rend un modèle téléchargé actif, et fixe CPU/GPU.",
+      "entree": { "type": "object", "required": ["nom"], "properties": { "nom": { "type": "string" }, "gpu": { "type": "boolean" } } },
+      "sortie": { "type": "object", "required": ["modele_actif"], "properties": { "modele_actif": { "type": "string" }, "gpu": { "type": "boolean" } } },
+      "exemple": { "nom": "qwen2.5-3b" }
+    },
+    {
+      "nom": "demarrer",
+      "description": "Démarre le moteur avec le modèle actif (sinon il démarre seul à la première génération).",
+      "entree": { "type": "object", "properties": {} },
+      "sortie": { "type": "object", "required": ["port", "modele"], "properties": { "port": { "type": "integer" }, "modele": { "type": "string" }, "gpu": { "type": "boolean" }, "pid": { "type": "integer" } } },
+      "exemple": {}
+    },
+    {
+      "nom": "arreter",
+      "description": "Arrête le moteur et libère la mémoire.",
+      "entree": { "type": "object", "properties": {} },
+      "sortie": { "type": "object", "required": ["arrete"], "properties": { "arrete": { "type": "boolean" } } },
+      "exemple": {}
+    },
+    {
+      "nom": "configurer_backend",
+      "description": "Avancé : utiliser un serveur déjà présent (ollama, openai-compatible) au lieu du moteur intégré, ou y revenir.",
+      "entree": { "type": "object", "required": ["backend"], "properties": { "backend": { "type": "string", "enum": ["integre", "ollama", "openai-compatible"] }, "url": { "type": "string" } } },
+      "sortie": { "type": "object", "required": ["backend"], "properties": { "backend": { "type": "string" }, "url": { "type": "string" } } },
+      "exemple": { "backend": "integre" }
     },
     {
       "nom": "generer",
@@ -51,7 +72,7 @@
           "consigne": { "type": "string", "description": "Ce que le modèle doit faire, en français" },
           "faits": { "type": "object", "description": "Données à utiliser (ex. le rapport d'une autre brique) — branchez ici la sortie d'une étape" },
           "systeme": { "type": "string", "description": "Rôle / règles (défaut : rédacteur ancré, français, chiffres tels quels)" },
-          "modele": { "type": "string", "description": "Nom d'un modèle installé (défaut : le modèle actif)" },
+          "modele": { "type": "string", "description": "Nom d'un modèle téléchargé (défaut : le modèle actif)" },
           "max_tokens": { "type": "integer", "minimum": 16 },
           "temperature": { "type": "number", "minimum": 0, "maximum": 2 }
         }

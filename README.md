@@ -31,8 +31,8 @@ Sans accès à Binance/CoinGecko (ou pour un essai hors ligne) : `PRIX_AGENT_SOU
 | `briques/prix-agent` | brique modèle au protocole existant « `python -m agent.<service>` → JSON, codes 0/1/2 », exposée en MCP **sans être réécrite** par l'adaptateur |
 | `briques/rapport-marche` | agent **sans LLM** : mesures calculées en code, rapport `.md` + `.html` (mode sombre) + graphique SVG |
 | `briques/demo-tache-longue` | modèle du pattern **tâche longue** : progrès sur disque, annulation coopérative, page interactive qui survit au rafraîchissement |
-| `briques/modele-local` | **le modèle de langage comme une brique** : page pour installer/choisir un modèle Ollama sans terminal, services `generer` (texte ancré sur des faits) et `generer_json` (sous schéma), branchable dans l'assembleur |
-| `forge/llm.py` | le client du modèle local (Ollama / serveur openai-compatible) : ancré, continuation automatique, JSON sous schéma, téléchargement en flux |
+| `briques/modele-local` | **le modèle de langage comme une brique, avec son moteur intégré** : depuis sa page, elle télécharge llama.cpp (CPU ou GPU) et un modèle GGUF, les lance elle-même — rien à installer à part ; services `generer` (texte ancré sur des faits) et `generer_json` (sous schéma), branchables dans l'assembleur |
+| `forge/llm.py` | le client du modèle local (moteur intégré / Ollama / openai-compatible) : ancré, continuation automatique, JSON sous schéma |
 | `pipelines/` | `rapport-btc-quotidien.json` (planifié 08:15) et `rapport-btc-commente.json` (le même + un commentaire du modèle local) |
 | `docs/PROTOCOLE.md` | le protocole complet |
 | `tests/` | `python -m pytest` |

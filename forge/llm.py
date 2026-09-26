@@ -29,7 +29,7 @@ from typing import Any
 from . import schemas
 from .utils.erreurs import ErreurForge
 
-URLS_PAR_DEFAUT = {"ollama": "http://localhost:11434", "openai-compatible": "http://localhost:8080"}
+URLS_PAR_DEFAUT = {"integre": "http://127.0.0.1:8791", "ollama": "http://localhost:11434", "openai-compatible": "http://localhost:8080"}
 HOTES_LOCAUX = ("localhost", "127.0.0.1", "[::1]", "0.0.0.0")
 
 
@@ -42,7 +42,11 @@ class ModeleLocal:
         self.delai_s = delai_s
         self.max_continuations = max_continuations
         if self.backend not in URLS_PAR_DEFAUT:
-            raise ErreurForge(f"backend inconnu : {self.backend}", "utilisez « ollama » ou « openai-compatible »")
+            raise ErreurForge(f"backend inconnu : {self.backend}", "utilisez « integre » (llama.cpp embarqué), « ollama » ou « openai-compatible »")
+        if self.backend == "integre":
+            self.backend_http = "openai-compatible"  # le moteur intégré (llama-server) parle l'API openai-compatible
+        else:
+            self.backend_http = self.backend
         if not self.nom:
             raise ErreurForge("modèle sans nom", 'donnez « nom », ex. "qwen2.5:7b"')
         hote = re.sub(r"^https?://", "", self.url).split("/")[0].rsplit(":", 1)[0]
@@ -56,26 +60,26 @@ class ModeleLocal:
     def disponible(self) -> tuple[bool, str]:
         """(ok, explication) : serveur joignable et modèle présent ?"""
         try:
-            if self.backend == "ollama":
+            if self.backend_http == "ollama":
                 d = self._get("/api/tags")
                 noms = [m.get("name", "") for m in d.get("models", [])]
                 if self.nom in noms or f"{self.nom}:latest" in noms:
                     return True, "prêt"
                 return False, f"modèle « {self.nom} » absent d'Ollama — lancez : ollama pull {self.nom}"
-            d = self._get("/v1/models")
-            return True, "serveur joignable"
+            self._get("/v1/models")
+            return True, "prêt"
         except ErreurForge as exc:
             return False, exc.cause
 
     def modeles(self) -> list[str]:
         """Modèles installés sur le serveur local."""
-        if self.backend == "ollama":
+        if self.backend_http == "ollama":
             return [m.get("name", "") for m in self._get("/api/tags").get("models", [])]
         return [m.get("id", "") for m in self._get("/v1/models").get("data", [])]
 
     def installer(self, nom: str, progres=None, annulee=None) -> None:
         """Télécharge un modèle (Ollama : /api/pull en flux). `progres(pourcentage, etape)` et `annulee()` optionnels."""
-        if self.backend != "ollama":
+        if self.backend_http != "ollama":
             raise ErreurForge("le téléchargement de modèle n'existe que pour Ollama", "installez le modèle avec l'outil de votre serveur")
         corps = json.dumps({"model": nom, "stream": True}).encode("utf-8")
         requete = urllib.request.Request(self.url + "/api/pull", data=corps, method="POST", headers={"Content-Type": "application/json"})
@@ -139,7 +143,7 @@ class ModeleLocal:
     # --- transport ---------------------------------------------------------------
     def _chat(self, messages: list[dict], temperature: float, max_tokens: int | None, format_json: dict | None = None) -> tuple[str, bool]:
         """Retourne (texte, coupé ?)."""
-        if self.backend == "ollama":
+        if self.backend_http == "ollama":
             corps: dict[str, Any] = {"model": self.nom, "messages": messages, "stream": False, "options": {"temperature": temperature}}
             if max_tokens:
                 corps["options"]["num_predict"] = max_tokens

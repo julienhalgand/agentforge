@@ -7,7 +7,7 @@
 <style>
   :root { color-scheme: dark; }
   body { margin: 0; padding: 18px; background: #0b0d12; color: #e6e9ef; font: 15px/1.5 system-ui, sans-serif; }
-  h1 { font-size: 18px; margin: 0 0 4px; } h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #9aa3b2; margin: 22px 0 8px; }
+  h1 { font-size: 18px; margin: 0 0 4px; } h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #9aa3b2; margin: 0 0 8px; }
   p.sourd, small { color: #9aa3b2; font-size: 13px; }
   label { display: block; font-size: 13px; color: #9aa3b2; margin: 8px 0 4px; }
   input, select, textarea { background: #151922; color: #e6e9ef; border: 1px solid #262b36; border-radius: 8px; padding: 7px 9px; font: inherit; width: 100%; box-sizing: border-box; }
@@ -15,128 +15,145 @@
   button { background: #1b2029; color: #e6e9ef; border: 1px solid #262b36; border-radius: 8px; padding: 7px 12px; font: inherit; cursor: pointer; margin-right: 6px; }
   button.principal { background: #f2b134; color: #111; font-weight: 600; border-color: #f2b134; } button:disabled { opacity: .5; cursor: default; }
   .carte { background: #151922; border: 1px solid #262b36; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
-  .etat { display: flex; align-items: center; gap: 8px; } .pastille { width: 10px; height: 10px; border-radius: 50%; background: #9aa3b2; } .pastille.ok { background: #5ad17a; } .pastille.ko { background: #ff6b6b; }
+  .etape-num { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #262b36; color: #e6e9ef; font-size: 12px; font-weight: 700; margin-right: 8px; }
+  .fait .etape-num { background: #5ad17a; color: #111; }
+  .etat { display: flex; align-items: center; gap: 8px; } .pastille { width: 10px; height: 10px; border-radius: 50%; background: #9aa3b2; flex: none; } .pastille.ok { background: #5ad17a; } .pastille.ko { background: #ff6b6b; }
   .barre { height: 12px; background: #0b0d12; border: 1px solid #262b36; border-radius: 6px; overflow: hidden; margin: 8px 0 4px; } .barre div { height: 100%; background: #f2b134; width: 0; transition: width .3s; }
   .erreur { background: #2a1a1a; border: 1px solid #5a2a2a; color: #ffb3b3; border-radius: 8px; padding: 10px; white-space: pre-wrap; font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
   .reponse { background: #0b0d12; border: 1px solid #262b36; border-radius: 8px; padding: 12px; white-space: pre-wrap; }
   .grille { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; } @media (max-width: 700px) { .grille { grid-template-columns: 1fr; } }
-  a { color: #7fb5ff; }
+  details { margin-top: 10px; } summary { cursor: pointer; color: #9aa3b2; font-size: 13px; }
 </style>
 </head>
 <body>
 <h1>🧠 Modèle local</h1>
-<p class="sourd">Un modèle de langage qui tourne sur cette machine, via Ollama. Rien ne part sur internet, aucune clé, aucun compte.</p>
+<p class="sourd">Un modèle de langage qui tourne sur cette machine, avec son propre moteur. Rien à installer à part : deux téléchargements depuis cette page, et c'est prêt. Rien ne part sur internet ensuite.</p>
 
 <div class="carte">
-  <h2 style="margin-top:0">État</h2>
-  <div class="etat"><span class="pastille" id="pastille"></span><span id="etat-texte">…</span></div>
-  <div id="aide-installation" style="display:none;margin-top:8px" class="sourd">
-    Ollama n'est pas joignable. Installez-le depuis <a href="https://ollama.com/download" target="_blank">ollama.com/download</a> (Windows : un installeur, puis il tourne en fond), puis revenez ici : cette page se met à jour toute seule.
-  </div>
+  <div class="etat"><span class="pastille" id="pastille"></span><strong id="etat-texte">…</strong></div>
+  <small id="etat-detail"></small>
 </div>
 
 <div class="grille">
-  <div class="carte">
-    <h2 style="margin-top:0">Modèle actif</h2>
-    <label>Modèles installés</label>
-    <select id="modeles"></select>
-    <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="gpu" style="width:auto"> utiliser la carte graphique (GPU) si disponible</label>
-    <div style="margin-top:8px"><button class="principal" onclick="choisir()">Utiliser ce modèle</button></div>
+  <div class="carte" id="carte-moteur">
+    <h2><span class="etape-num">1</span>Le moteur</h2>
+    <small id="moteur-info">—</small>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="gpu" checked style="width:auto"> utiliser la carte graphique (GPU) — NVIDIA, AMD ou Intel</label>
+    <div style="margin-top:8px"><button class="principal" id="installer-moteur" onclick="installerMoteur()">⬇ Installer le moteur</button><button onclick="annuler('moteur')" id="annuler-moteur" disabled>■ Annuler</button></div>
+    <div class="barre"><div id="barre-moteur"></div></div>
+    <small id="progres-moteur">—</small>
+    <div id="erreur-moteur" class="erreur" style="display:none;margin-top:8px"></div>
   </div>
-  <div class="carte">
-    <h2 style="margin-top:0">Installer un modèle</h2>
-    <label>Nom (bibliothèque Ollama)</label>
-    <select id="catalogue">
-      <option value="qwen2.5:3b">qwen2.5:3b — léger, bon en français (≈ 2 Go, CPU ok)</option>
-      <option value="qwen2.5:7b">qwen2.5:7b — meilleur, GPU 6 Go ou CPU lent (≈ 4,7 Go)</option>
-      <option value="llama3.2:3b">llama3.2:3b — léger, généraliste (≈ 2 Go)</option>
-      <option value="mistral:7b">mistral:7b — bon en français (≈ 4,1 Go)</option>
-      <option value="gemma3:4b">gemma3:4b — compact, multilingue (≈ 3,3 Go)</option>
-      <option value="autre">autre (saisir le nom)</option>
-    </select>
-    <input id="autre" placeholder="ex. phi4-mini:3.8b" style="display:none;margin-top:6px">
-    <div style="margin-top:8px"><button class="principal" id="installer" onclick="installer()">⬇ Télécharger</button><button id="annuler" onclick="annuler()" disabled>■ Annuler</button></div>
-    <div class="barre"><div id="remplissage"></div></div>
-    <small id="progres">—</small>
-    <div id="erreur-tache" class="erreur" style="display:none;margin-top:8px"></div>
+
+  <div class="carte" id="carte-modele">
+    <h2><span class="etape-num">2</span>Un modèle</h2>
+    <label>Catalogue</label>
+    <select id="catalogue"></select>
+    <div style="margin-top:8px"><button class="principal" id="installer-modele" onclick="installerModele()">⬇ Télécharger</button><button onclick="annuler(tacheModele)" id="annuler-modele" disabled>■ Annuler</button></div>
+    <div class="barre"><div id="barre-modele"></div></div>
+    <small id="progres-modele">—</small>
+    <div id="erreur-modele" class="erreur" style="display:none;margin-top:8px"></div>
+    <label>Modèle actif (parmi les téléchargés)</label>
+    <select id="modeles"></select>
+    <div style="margin-top:8px"><button onclick="choisir()">Utiliser ce modèle</button><button onclick="arreter()" id="arreter">■ Arrêter le moteur</button></div>
   </div>
 </div>
 
 <div class="carte">
-  <h2 style="margin-top:0">Essayer</h2>
+  <h2><span class="etape-num">3</span>Essayer</h2>
   <label>Consigne</label>
   <textarea id="consigne">Explique en trois phrases ce qu'est une moyenne mobile, pour un débutant.</textarea>
   <label>Faits (JSON, optionnel — ce que le modèle a le droit d'utiliser)</label>
   <textarea id="faits" placeholder='{"prix": 65000, "variation_7j": "+2,4 %"}' style="min-height:60px"></textarea>
-  <div style="margin-top:8px"><button class="principal" id="generer" onclick="generer()">▶ Générer</button> <small id="duree"></small></div>
+  <div style="margin-top:8px"><button class="principal" id="generer" onclick="generer()">▶ Générer</button> <small id="duree"></small> <small>(le premier appel démarre le moteur : quelques secondes)</small></div>
   <div id="reponse" style="margin-top:10px"></div>
+  <details><summary>Avancé : utiliser un serveur déjà présent (Ollama, LM Studio…)</summary>
+    <label>Backend</label><select id="backend"><option value="integre">moteur intégré (recommandé)</option><option value="ollama">ollama</option><option value="openai-compatible">openai-compatible</option></select>
+    <label>URL (locale)</label><input id="backend-url" placeholder="http://localhost:11434">
+    <div style="margin-top:8px"><button onclick="configurerBackend()">Appliquer</button></div>
+  </details>
 </div>
 
 <script>
 const BRIQUE = location.pathname.split("/")[2];
 const api = (u, corps) => fetch(u, corps === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corps) }).then(r => r.json());
 const appeler = (service, entree) => api(`/api/appeler/${BRIQUE}/${service}`, entree || {});
-let ETAT = null, tacheSuivie = localStorage.getItem("modele-tache") || null;
+let ETAT = null, tacheModele = localStorage.getItem("modele-tache") || null;
 
-document.getElementById("catalogue").onchange = (e) => { document.getElementById("autre").style.display = e.target.value === "autre" ? "" : "none"; };
+function texteErreur(e) { return e.cause + (e.details && e.details.length ? "\n  - " + e.details.join("\n  - ") : "") + (e.remede ? "\nRemède : " + e.remede : ""); }
 
 async function rafraichirEtat() {
   const r = await appeler("etat");
   if (r.erreur) { document.getElementById("etat-texte").textContent = r.erreur.cause; return; }
   ETAT = r.resultat;
-  const p = document.getElementById("pastille"); p.className = "pastille " + (ETAT.pret ? "ok" : "ko");
-  document.getElementById("etat-texte").textContent = ETAT.joignable
-    ? (ETAT.pret ? `prêt — ${ETAT.modele_actif} sur ${ETAT.backend} (${ETAT.url})` : `Ollama répond, mais : ${ETAT.explication}`)
-    : `${ETAT.backend} injoignable sur ${ETAT.url}`;
-  document.getElementById("aide-installation").style.display = ETAT.joignable ? "none" : "";
-  const sel = document.getElementById("modeles");
-  const actuel = sel.value;
-  sel.replaceChildren(...(ETAT.modeles.length ? ETAT.modeles : ["(aucun modèle installé)"]).map(m => { const o = document.createElement("option"); o.value = m; o.textContent = m + (m === ETAT.modele_actif || m === ETAT.modele_actif + ":latest" ? " ✓ actif" : ""); return o; }));
-  if (actuel && ETAT.modeles.includes(actuel)) sel.value = actuel;
+  document.getElementById("pastille").className = "pastille " + (ETAT.pret ? "ok" : "ko");
+  document.getElementById("etat-texte").textContent = ETAT.pret ? `prêt — ${ETAT.modele_actif}` : "pas encore prêt";
+  document.getElementById("etat-detail").textContent = `${ETAT.explication} · ${ETAT.backend === "integre" ? "moteur intégré" : ETAT.backend} · ${ETAT.plateforme}` + (ETAT.gpu ? " · GPU" : " · CPU");
+  document.getElementById("carte-moteur").className = "carte" + (ETAT.moteur ? " fait" : "");
+  document.getElementById("carte-modele").className = "carte" + (ETAT.pret ? " fait" : "");
+  document.getElementById("moteur-info").textContent = ETAT.backend !== "integre" ? `backend ${ETAT.backend} : pas de moteur intégré à installer` : ETAT.moteur ? `installé : llama.cpp ${ETAT.moteur.version} (${ETAT.moteur.gpu ? "GPU" : "CPU"})` : "pas encore installé (≈ 20 à 80 Mo, une seule fois)";
+  document.getElementById("installer-moteur").textContent = ETAT.moteur ? "⟳ Réinstaller le moteur" : "⬇ Installer le moteur";
   document.getElementById("gpu").checked = ETAT.gpu;
+  const cat = document.getElementById("catalogue");
+  if (!cat.options.length) cat.replaceChildren(...(ETAT.catalogue || []).map(c => { const o = document.createElement("option"); o.value = c.nom; o.textContent = `${c.titre} (≈ ${c.taille_go} Go)`; if (c.nom === "qwen2.5-3b") o.selected = true; return o; }));
+  const sel = document.getElementById("modeles"); const actuel = sel.value;
+  sel.replaceChildren(...(ETAT.modeles.length ? ETAT.modeles : ["(aucun modèle téléchargé)"]).map(m => { const o = document.createElement("option"); o.value = m; o.textContent = m + (m === ETAT.modele_actif ? " ✓ actif" : ""); return o; }));
+  if (actuel && ETAT.modeles.includes(actuel)) sel.value = actuel; else if (ETAT.modeles.includes(ETAT.modele_actif)) sel.value = ETAT.modele_actif;
   document.getElementById("generer").disabled = !ETAT.pret;
+  document.getElementById("arreter").style.display = ETAT.serveur ? "" : "none";
+  document.getElementById("backend").value = ETAT.backend;
+}
+async function installerMoteur() {
+  const r = await api(`/api/lancer-tache/${BRIQUE}/installer_moteur`, { gpu: document.getElementById("gpu").checked });
+  if (r.erreur) { montrerErreur("moteur", r.erreur); }
+}
+async function installerModele() {
+  const nom = document.getElementById("catalogue").value;
+  const r = await api(`/api/lancer-tache/${BRIQUE}/installer_modele`, { nom });
+  if (r.erreur) { montrerErreur("modele", r.erreur); return; }
+  tacheModele = nom.replace(/[:/]/g, "_"); localStorage.setItem("modele-tache", tacheModele);
+}
+async function annuler(nom) { if (nom) await api(`/taches/${BRIQUE}/${nom}/annuler`, {}); }
+function montrerErreur(quoi, e) { const b = document.getElementById("erreur-" + quoi); b.style.display = ""; b.textContent = typeof e === "string" ? e : texteErreur(e); }
+async function suivre(nomTache, quoi) {
+  if (!nomTache) return;
+  const t = await api(`/taches/${BRIQUE}/${nomTache}`);
+  document.getElementById("barre-" + quoi).style.width = `${t.pourcentage || 0}%`;
+  document.getElementById("progres-" + quoi).textContent = t.etat === "en_attente" ? "—" : `${t.etat} — ${t.pourcentage || 0} % — ${t.etape || ""}`;
+  document.getElementById("annuler-" + quoi).disabled = t.etat !== "en_cours";
+  document.getElementById("installer-" + quoi).disabled = t.etat === "en_cours";
+  const err = document.getElementById("erreur-" + quoi);
+  if (t.etat === "echec") { err.style.display = ""; err.textContent = t.erreur_texte || "échec"; } else err.style.display = "none";
+  if (t.etat === "termine" && t.mis_a_jour_ms > Date.now() - 3000) rafraichirEtat();
 }
 async function choisir() {
-  const nom = document.getElementById("modeles").value;
-  if (!nom || nom.startsWith("(")) return;
+  const nom = document.getElementById("modeles").value; if (!nom || nom.startsWith("(")) return;
   const r = await appeler("choisir_modele", { nom, gpu: document.getElementById("gpu").checked });
-  if (r.erreur) alert(r.erreur.cause);
-  rafraichirEtat();
+  if (r.erreur) alert(texteErreur(r.erreur)); rafraichirEtat();
 }
-async function installer() {
-  let nom = document.getElementById("catalogue").value;
-  if (nom === "autre") nom = document.getElementById("autre").value.trim();
-  if (!nom) return;
-  const r = await api(`/api/lancer-tache/${BRIQUE}/installer_modele`, { nom });
-  if (r.erreur) { document.getElementById("progres").textContent = r.erreur.cause; return; }
-  tacheSuivie = nom.replace(/[:/]/g, "_"); localStorage.setItem("modele-tache", tacheSuivie);
-}
-async function annuler() { if (tacheSuivie) await api(`/taches/${BRIQUE}/${tacheSuivie}/annuler`, {}); }
-async function rafraichirTache() {
-  if (!tacheSuivie) return;
-  const t = await api(`/taches/${BRIQUE}/${tacheSuivie}`);
-  document.getElementById("remplissage").style.width = `${t.pourcentage || 0}%`;
-  document.getElementById("progres").textContent = `${t.tache} : ${t.etat} — ${t.pourcentage || 0} % — ${t.etape || ""}`;
-  const bloc = document.getElementById("erreur-tache");
-  if (t.etat === "echec") { bloc.style.display = ""; bloc.textContent = t.erreur_texte || `échec — voir ${t.erreur}`; } else bloc.style.display = "none";
-  document.getElementById("annuler").disabled = t.etat !== "en_cours";
-  document.getElementById("installer").disabled = t.etat === "en_cours";
-  if (t.etat === "termine") rafraichirEtat();
+async function arreter() { await appeler("arreter"); rafraichirEtat(); }
+async function configurerBackend() {
+  const r = await appeler("configurer_backend", { backend: document.getElementById("backend").value, url: document.getElementById("backend-url").value.trim() || undefined });
+  if (r.erreur) alert(texteErreur(r.erreur)); rafraichirEtat();
 }
 async function generer() {
   const bouton = document.getElementById("generer"); bouton.disabled = true;
-  const rep = document.getElementById("reponse"); rep.replaceChildren(); rep.textContent = "génération en cours…";
+  const rep = document.getElementById("reponse"); rep.replaceChildren(); rep.textContent = "génération en cours… (le moteur démarre si besoin)";
   const entree = { consigne: document.getElementById("consigne").value };
   const faits = document.getElementById("faits").value.trim();
-  if (faits) { try { entree.faits = JSON.parse(faits); } catch (e) { rep.innerHTML = `<div class="erreur">Les faits ne sont pas un JSON valide : ${e.message}</div>`; bouton.disabled = false; return; } }
+  if (faits) { try { entree.faits = JSON.parse(faits); } catch (e) { rep.innerHTML = ""; montrerErreurDans(rep, "Les faits ne sont pas un JSON valide : " + e.message); bouton.disabled = false; return; } }
   const debut = Date.now();
   const r = await appeler("generer", entree);
   document.getElementById("duree").textContent = `${((Date.now() - debut) / 1000).toFixed(1)} s`;
-  if (r.erreur) { rep.innerHTML = ""; const d = document.createElement("div"); d.className = "erreur"; d.textContent = r.erreur.cause + (r.erreur.remede ? "\nRemède : " + r.erreur.remede : ""); rep.append(d); }
-  else { rep.innerHTML = ""; const d = document.createElement("div"); d.className = "reponse"; d.textContent = r.resultat.texte; rep.append(d); const s = document.createElement("small"); s.textContent = `${r.resultat.modele} · ${r.resultat.continuations || 0} continuation(s)`; rep.append(s); }
-  bouton.disabled = false;
+  rep.innerHTML = "";
+  if (r.erreur) montrerErreurDans(rep, texteErreur(r.erreur));
+  else { const d = document.createElement("div"); d.className = "reponse"; d.textContent = r.resultat.texte; rep.append(d); const s = document.createElement("small"); s.textContent = `${r.resultat.modele} · ${r.resultat.continuations || 0} continuation(s)`; rep.append(s); }
+  bouton.disabled = false; rafraichirEtat();
 }
-rafraichirEtat(); rafraichirTache(); setInterval(rafraichirTache, 1000); setInterval(rafraichirEtat, 8000);
+function montrerErreurDans(conteneur, texte) { const d = document.createElement("div"); d.className = "erreur"; d.textContent = texte; conteneur.append(d); }
+rafraichirEtat();
+setInterval(() => { suivre("moteur", "moteur"); suivre(tacheModele, "modele"); }, 1000);
+setInterval(rafraichirEtat, 8000);
 </script>
 </body>
 </html>

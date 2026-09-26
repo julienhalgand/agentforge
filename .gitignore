@@ -228,3 +228,5 @@ briques/*/rapports/
 
 briques/*/taches/
 briques/*/modele.json
+briques/modele-local/moteur/
+briques/modele-local/modeles/

@@ -142,9 +142,13 @@ déclare `"taches": "taches"` (dossier des fichiers de tâches) et `"duree_longu
 
 ## 6 bis. Le modèle local, optionnel et ancré
 
-`forge.llm.ModeleLocal` parle à Ollama (`http://localhost:11434`, CPU ou GPU) ou à tout serveur
-« openai-compatible » **local** (llama.cpp, vLLM, LM Studio) ; une URL non locale est refusée. Le
-manifeste d'un agent déclare `"modele": { "backend": "ollama", "nom": "qwen2.5:7b", "gpu": true, "cpu_ok": true }`.
+**Rien à installer à part.** La brique `modele-local` embarque son moteur : depuis sa page, elle
+télécharge `llama-server` (dernière version de ggml-org/llama.cpp — variante CPU, ou Vulkan pour
+un GPU NVIDIA/AMD/Intel, Metal sur Mac) dans `moteur/`, un modèle GGUF quantifié dans `modeles/`
+(reprise si interrompu), puis lance le moteur elle-même sur `127.0.0.1:8791` (API openai-compatible)
+et l'arrête à la demande. `forge.llm.ModeleLocal` parle à ce moteur (`backend: "integre"`), ou, pour
+qui en a déjà un, à Ollama ou à tout serveur openai-compatible **local** ; une URL non locale est
+refusée. Le manifeste d'un agent déclare `"modele": { "backend": "integre", "nom": "qwen2.5-3b", "gpu": true, "cpu_ok": true }`.
 
 - **ancré** : la brique fournit les faits dans le prompt et vérifie la sortie ; le modèle trie ou
   rédige, les chiffres sont recopiés tels quels ;
@@ -154,9 +158,9 @@ manifeste d'un agent déclare `"modele": { "backend": "ollama", "nom": "qwen2.5:
   (Ollama : `format`) et la valide avant de la rendre ;
 - `disponible()` dit si le serveur répond et si le modèle est tiré (`ollama pull …` sinon).
 
-**Le modèle est une brique** : `briques/modele-local` expose `etat`, `choisir_modele`,
-`installer_modele` (tâche longue, annulable), `generer` (`consigne` + `faits` → `forge://texte/generation@1`)
-et `generer_json`. Sa page permet à un non-développeur d'installer un modèle, d'en choisir un et de
+**Le modèle est une brique** : `briques/modele-local` expose `etat`, `installer_moteur` et
+`installer_modele` (tâches longues, annulables), `choisir_modele`, `demarrer`, `arreter`,
+`configurer_backend`, `generer` (`consigne` + `faits` → `forge://texte/generation@1`) et `generer_json`. Sa page permet à un non-développeur d'installer un modèle, d'en choisir un et de
 l'essayer. Dans un pipeline, on branche la sortie d'une étape sur `faits` : le modèle ne voit que ce
 qu'on lui donne.
 
