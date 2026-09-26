@@ -133,7 +133,7 @@ def test_composer_normalise_brique_point_service(dossier_utilisateur):
 def test_decider_et_brique_avec_page(dossier_utilisateur):
     assert creation.decider("je veux un métronome", lambda c, s, sy: {"action": "creer", "raison": "aucune brique ne fait ça"})["action"] == "creer"
     spec = {"nom": "metronome", "description": "Un métronome.", "icone": "🎵", "services": [],
-            "page": "<!doctype html><html lang='fr'><body><h1>Métronome</h1><button>Démarrer</button></body></html>"}
+            "page": "<!doctype html><html lang='fr'><body><h1>Métronome</h1><button onclick=\"this.textContent='Tic'\">Démarrer</button></body></html>"}
     r = creation.creer_brique("je veux un métronome", lambda c, s, sy: spec)
     m = registre.trouver_brique("metronome")
     assert m.page and m.page.read_text(encoding="utf-8").startswith("<!doctype") and m.services == []
@@ -191,14 +191,14 @@ def test_ameliorer_une_brique_page(dossier_utilisateur):
 
     def modele(consigne, schema, systeme):
         demandes.append(consigne)
-        return {"nom": "autre-nom", "description": "Un métronome avec son.", "icone": "🎵", "page": "<!doctype html><html lang='fr'><body><h1>Métronome</h1><button>Son</button></body></html>"}
+        return {"nom": "autre-nom", "description": "Un métronome avec son.", "icone": "🎵", "page": "<!doctype html><html lang='fr'><body><h1>Métronome</h1><button onclick=\"document.querySelector('h1').textContent='Son'\">Son</button></body></html>"}
 
     journal = []
     r = creation.ameliorer_brique("metronome", "il n'y a pas de son", modele, journal=journal.append)
     assert r["nom"] == "metronome" and r["tours"] == 1
     assert "il n'y a pas de son" in demandes[0] and "<h1>Métronome</h1>" in demandes[0]  # la brique actuelle est envoyée
     m = registre.trouver_brique("metronome")
-    assert "<button>Son</button>" in m.page.read_text(encoding="utf-8")
+    assert ">Son</button>" in m.page.read_text(encoding="utf-8")
     assert list((m.dossier / "page" / ".sauvegardes").glob("index.html.*"))  # l'ancienne page est gardée
 
 
