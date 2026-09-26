@@ -173,10 +173,10 @@ def test_brique_de_bout_en_bout(brique, monkeypatch):
         with ClientMCP(m.commande_serveur(), m.dossier, environnement=env) as client:
             e = client.appeler("etat", {})
             assert e["backend"] == "integre" and not e["pret"] and "moteur" in e["explication"]
-            t = client.appeler("installer_moteur", {"gpu": False})
-            assert t["etat"] == "termine", t
-            t = client.appeler("installer_modele", {"nom": "faux-1b"})
-            assert t["etat"] == "termine", t
+            # préparation automatique : moteur + modèle par défaut, sans rien demander
+            t = client.appeler("preparer", {"gpu": False, "modele": "faux-1b"})
+            assert t["etat"] == "termine" and t["etape"] == "prêt — faux-1b", t
+            assert client.appeler("preparer", {"gpu": False, "modele": "faux-1b"})["etat"] == "termine"  # idempotent
             e = client.appeler("etat", {})
             assert e["pret"] and e["modele_actif"] == "faux-1b" and e["moteur"]["version"] == "b9999"
             g = client.appeler("generer", {"consigne": "résume", "faits": {"prix": 65000}})
@@ -205,3 +205,23 @@ def test_pipeline_commente_est_valide(tmp_path, monkeypatch):
     p = registre.trouver_pipeline("rapport-btc-commente")
     etapes = pipeline.verifier(p)
     assert [e.brique.nom for e in etapes] == ["prix-agent", "rapport-marche", "modele-local"]
+
+
+def test_repli_cpu_si_le_moteur_gpu_ne_demarre_pas(brique, monkeypatch):
+    """Variante GPU installée mais qui meurt au démarrage → réinstallation CPU et second essai, automatiquement."""
+    mod_moteur.installer_moteur(gpu=True)
+    assert mod_moteur.moteur_installe()["gpu"] is True
+    mod_moteur.telecharger_modele("faux-1b")
+    vrai = mod_moteur._demarrer_serveur
+    appels = []
+
+    def faux(modele, gpu, port, contexte, attente_s):
+        appels.append(gpu)
+        if gpu:
+            raise ErreurForge("le moteur s'est arrêté (code 1) au démarrage", "pas de pilote Vulkan")
+        return vrai(modele, gpu, 8794, contexte, 20)
+
+    monkeypatch.setattr(mod_moteur, "_demarrer_serveur", faux)
+    info = mod_moteur.demarrer_serveur("faux-1b", gpu=True)
+    assert appels == [True, False] and "repli_cpu" in info and mod_moteur.moteur_installe()["gpu"] is False
+    mod_moteur.arreter_serveur()

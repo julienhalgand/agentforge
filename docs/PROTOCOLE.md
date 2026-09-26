@@ -142,11 +142,15 @@ déclare `"taches": "taches"` (dossier des fichiers de tâches) et `"duree_longu
 
 ## 6 bis. Le modèle local, optionnel et ancré
 
-**Rien à installer à part.** La brique `modele-local` embarque son moteur : depuis sa page, elle
-télécharge `llama-server` (dernière version de ggml-org/llama.cpp — variante CPU, ou Vulkan pour
+**Rien à installer, rien à cliquer.** La brique `modele-local` embarque son moteur et se prépare
+toute seule : le manifeste déclare `"preparation": { "service": "preparer" }`, et le hub lance ce
+service au démarrage (idempotent, tâche longue visible sur la page) ; `generer` le lance aussi si
+besoin. Toute brique peut déclarer une `preparation` (télécharger un moteur, un dictionnaire, une
+voix…). Elle télécharge `llama-server` (dernière version de ggml-org/llama.cpp — variante CPU, ou Vulkan pour
 un GPU NVIDIA/AMD/Intel, Metal sur Mac) dans `moteur/`, un modèle GGUF quantifié dans `modeles/`
 (reprise si interrompu), puis lance le moteur elle-même sur `127.0.0.1:8791` (API openai-compatible)
-et l'arrête à la demande. `forge.llm.ModeleLocal` parle à ce moteur (`backend: "integre"`), ou, pour
+et l'arrête à la demande ; si la variante GPU ne démarre pas (pas de pilote Vulkan), la variante CPU
+est installée et utilisée automatiquement. `forge.llm.ModeleLocal` parle à ce moteur (`backend: "integre"`), ou, pour
 qui en a déjà un, à Ollama ou à tout serveur openai-compatible **local** ; une URL non locale est
 refusée. Le manifeste d'un agent déclare `"modele": { "backend": "integre", "nom": "qwen2.5-3b", "gpu": true, "cpu_ok": true }`.
 

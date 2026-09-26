@@ -55,10 +55,15 @@ def modele_pret(nom: str | None = None) -> ModeleLocal:
     if nom:
         c = {**c, "nom": nom}
     if c.get("backend", "integre") == "integre":
-        if not c.get("nom"):
-            raise ErreurForge("aucun modèle choisi", "ouvrez la page de la brique modele-local : installez le moteur, téléchargez un modèle")
-        info = mod_moteur.demarrer_serveur(c["nom"], bool(c.get("gpu", True)))
-        return ModeleLocal({"backend": "integre", "nom": c["nom"], "url": mod_moteur._url(info["port"]), "gpu": c.get("gpu", True)})
+        nom_modele = c.get("nom") or mod_moteur.MODELE_PAR_DEFAUT
+        if not mod_moteur.moteur_installe() or not (mod_moteur.DOSSIER_MODELES / f"{nom_modele}.gguf").exists():
+            preparer({"modele": nom_modele})  # première utilisation : tout se prépare tout seul (peut prendre plusieurs minutes)
+            if not mod_moteur.moteur_installe() or not (mod_moteur.DOSSIER_MODELES / f"{nom_modele}.gguf").exists():
+                raise ErreurForge("la préparation automatique a échoué", "ouvrez la page de la brique modele-local : la cause y est affichée", [Tache(DOSSIER_TACHES, "preparation").etat().get("etape", "")])
+        info = mod_moteur.demarrer_serveur(nom_modele, bool(c.get("gpu", True)))
+        if info.get("repli_cpu"):
+            enregistrer_configuration(gpu=False)  # le GPU n'a pas marché : on reste en CPU désormais
+        return ModeleLocal({"backend": "integre", "nom": nom_modele, "url": mod_moteur._url(info["port"]), "gpu": not info.get("repli_cpu") and c.get("gpu", True)})
     m = ModeleLocal(c)
     pret, explication = m.disponible()
     if not pret:
@@ -97,6 +102,29 @@ def etat(_entree: dict) -> dict:
         return {**base, "url": m.url, "joignable": False, "modeles": [], "pret": False, "explication": exc.cause + " — " + exc.remede}
 
 
+@serveur.service("preparer", "Prépare tout seul : moteur puis modèle par défaut (tâche longue, idempotente). Lancé automatiquement par le hub.", entree={"type": "object"}, sortie="forge://tache/progres@1")
+def preparer(entree: dict) -> dict:
+    c = configuration()
+    if c.get("backend", "integre") != "integre":
+        t = Tache(DOSSIER_TACHES, "preparation")
+        t.demarrer("backend externe : rien à préparer")
+        return t.terminer(etape="backend externe : rien à préparer")
+    tache = Tache(DOSSIER_TACHES, "preparation")
+    if tache.etat().get("etat") == "en_cours" and tache.etat().get("mis_a_jour_ms", 0) > (time.time() - 120) * 1000:
+        return tache.etat()  # déjà en cours ailleurs (verrou souple)
+    tache.demarrer("préparation automatique")
+    gpu = bool(entree.get("gpu", c.get("gpu", True)))
+    modele = entree.get("modele") or c.get("nom") or mod_moteur.MODELE_PAR_DEFAUT
+    try:
+        mod_moteur.preparer(gpu, progres=tache.progres, annulee=tache.annulee, modele=modele)
+    except ErreurForge as exc:
+        return tache.echouer(exc.texte())
+    if tache.annulee():
+        return tache.annuler("préparation interrompue ; elle reprendra au prochain démarrage")
+    enregistrer_configuration(backend="integre", nom=modele, gpu=gpu)
+    return tache.terminer(etape=f"prêt — {modele}")
+
+
 @serveur.service("installer_moteur", "Télécharge et installe le moteur llama.cpp (tâche longue).", entree={"type": "object"}, sortie="forge://tache/progres@1")
 def installer_moteur(entree: dict) -> dict:
     gpu = bool(entree.get("gpu", configuration().get("gpu", True)))
@@ -120,9 +148,11 @@ def installer_modele(entree: dict) -> dict:
     try:
         if configuration().get("backend", "integre") == "integre":
             fichier = mod_moteur.telecharger_modele(nom, progres=tache.progres, annulee=tache.annulee, url=entree.get("url"))
-            if not configuration().get("nom") or not (mod_moteur.DOSSIER_MODELES / f"{configuration()['nom']}.gguf").exists():
-                enregistrer_configuration(nom=nom)  # aucun modèle actif utilisable → celui-ci
-            return tache.terminer(str(fichier), etape=f"{nom} téléchargé")
+            if entree.get("activer", True):
+                enregistrer_configuration(nom=nom)
+                if mod_moteur.serveur_en_marche():
+                    mod_moteur.arreter_serveur()  # la prochaine génération repartira avec ce modèle
+            return tache.terminer(str(fichier), etape=f"{nom} téléchargé et actif")
         m = ModeleLocal(configuration())
         m.installer(nom, progres=tache.progres, annulee=tache.annulee)
         if tache.annulee():

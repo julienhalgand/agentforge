@@ -3,100 +3,364 @@
   "type": "application",
   "nom": "modele-local",
   "version": "0.2.0",
-  "description": "Modèle de langage local avec son moteur intégré : la brique télécharge llama.cpp et un modèle depuis sa page, les lance elle-même (CPU ou GPU) et génère du texte ou du JSON sous schéma. Rien à installer à part, zéro cloud, zéro clé.",
+  "description": "Modèle de langage local, autonome : au premier démarrage la brique télécharge toute seule son moteur (llama.cpp, CPU ou GPU) et un modèle par défaut, puis génère du texte ou du JSON sous schéma. Rien à installer, rien à configurer, zéro cloud, zéro clé.",
   "icone": "🧠",
   "interpreteur": "python",
-  "transport": { "type": "mcp-stdio", "commande": ["-m", "modele_local.serveur"] },
+  "transport": {
+    "type": "mcp-stdio",
+    "commande": [
+      "-m",
+      "modele_local.serveur"
+    ]
+  },
   "page": "page/index.html",
   "taches": "taches",
-  "modele": { "backend": "integre", "nom": "", "gpu": true, "cpu_ok": true },
+  "modele": {
+    "backend": "integre",
+    "nom": "qwen2.5-1.5b",
+    "gpu": true,
+    "cpu_ok": true
+  },
+  "preparation": {
+    "service": "preparer"
+  },
   "services": [
+    {
+      "nom": "preparer",
+      "description": "Prépare tout seul : télécharge le moteur puis le modèle par défaut si absents. Lancé automatiquement par le hub au démarrage. Tâche longue.",
+      "duree_longue": true,
+      "entree": {
+        "type": "object",
+        "properties": {
+          "gpu": {
+            "type": "boolean"
+          },
+          "modele": {
+            "type": "string"
+          }
+        }
+      },
+      "sortie": "forge://tache/progres@1",
+      "exemple": {}
+    },
     {
       "nom": "etat",
       "description": "Moteur installé ? modèles téléchargés ? modèle actif ? moteur en marche ?",
-      "entree": { "type": "object", "properties": {} },
-      "sortie": { "type": "object", "required": ["backend", "modele_actif", "pret"], "properties": { "backend": { "type": "string" }, "modele_actif": { "type": "string" }, "pret": { "type": "boolean" }, "explication": { "type": "string" }, "modeles": { "type": "array" } } },
+      "entree": {
+        "type": "object",
+        "properties": {}
+      },
+      "sortie": {
+        "type": "object",
+        "required": [
+          "backend",
+          "modele_actif",
+          "pret"
+        ],
+        "properties": {
+          "backend": {
+            "type": "string"
+          },
+          "modele_actif": {
+            "type": "string"
+          },
+          "pret": {
+            "type": "boolean"
+          },
+          "explication": {
+            "type": "string"
+          },
+          "modeles": {
+            "type": "array"
+          }
+        }
+      },
       "exemple": {}
     },
     {
       "nom": "installer_moteur",
       "description": "Télécharge et installe le moteur llama.cpp (une fois ; CPU, ou Vulkan pour le GPU). Tâche longue.",
       "duree_longue": true,
-      "entree": { "type": "object", "properties": { "gpu": { "type": "boolean", "description": "Prendre la variante GPU (Vulkan : NVIDIA, AMD, Intel)" } } },
+      "entree": {
+        "type": "object",
+        "properties": {
+          "gpu": {
+            "type": "boolean",
+            "description": "Prendre la variante GPU (Vulkan : NVIDIA, AMD, Intel)"
+          }
+        }
+      },
       "sortie": "forge://tache/progres@1",
-      "exemple": { "gpu": true }
+      "exemple": {
+        "gpu": true
+      }
     },
     {
       "nom": "installer_modele",
-      "description": "Télécharge un modèle du catalogue (fichier GGUF, reprise si interrompu). Tâche longue.",
+      "description": "Télécharge un modèle du catalogue (fichier GGUF, reprise si interrompu) et le rend actif. Tâche longue.",
       "duree_longue": true,
-      "entree": { "type": "object", "required": ["nom"], "properties": { "nom": { "type": "string", "enum": ["qwen2.5-1.5b", "qwen2.5-3b", "qwen2.5-7b", "llama-3.2-3b", "mistral-7b"] }, "url": { "type": "string", "description": "URL directe d'un .gguf si hors catalogue" } } },
+      "entree": {
+        "type": "object",
+        "required": [
+          "nom"
+        ],
+        "properties": {
+          "nom": {
+            "type": "string",
+            "enum": [
+              "qwen2.5-1.5b",
+              "qwen2.5-3b",
+              "qwen2.5-7b",
+              "llama-3.2-3b",
+              "mistral-7b"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "description": "URL directe d'un .gguf si hors catalogue"
+          },
+          "activer": {
+            "type": "boolean",
+            "description": "Le rendre actif une fois téléchargé (défaut : oui)"
+          }
+        }
+      },
       "sortie": "forge://tache/progres@1",
-      "exemple": { "nom": "qwen2.5-3b" }
+      "exemple": {
+        "nom": "qwen2.5-3b"
+      }
     },
     {
       "nom": "choisir_modele",
       "description": "Rend un modèle téléchargé actif, et fixe CPU/GPU.",
-      "entree": { "type": "object", "required": ["nom"], "properties": { "nom": { "type": "string" }, "gpu": { "type": "boolean" } } },
-      "sortie": { "type": "object", "required": ["modele_actif"], "properties": { "modele_actif": { "type": "string" }, "gpu": { "type": "boolean" } } },
-      "exemple": { "nom": "qwen2.5-3b" }
+      "entree": {
+        "type": "object",
+        "required": [
+          "nom"
+        ],
+        "properties": {
+          "nom": {
+            "type": "string"
+          },
+          "gpu": {
+            "type": "boolean"
+          }
+        }
+      },
+      "sortie": {
+        "type": "object",
+        "required": [
+          "modele_actif"
+        ],
+        "properties": {
+          "modele_actif": {
+            "type": "string"
+          },
+          "gpu": {
+            "type": "boolean"
+          }
+        }
+      },
+      "exemple": {
+        "nom": "qwen2.5-3b"
+      }
     },
     {
       "nom": "demarrer",
       "description": "Démarre le moteur avec le modèle actif (sinon il démarre seul à la première génération).",
-      "entree": { "type": "object", "properties": {} },
-      "sortie": { "type": "object", "required": ["port", "modele"], "properties": { "port": { "type": "integer" }, "modele": { "type": "string" }, "gpu": { "type": "boolean" }, "pid": { "type": "integer" } } },
+      "entree": {
+        "type": "object",
+        "properties": {}
+      },
+      "sortie": {
+        "type": "object",
+        "required": [
+          "port",
+          "modele"
+        ],
+        "properties": {
+          "port": {
+            "type": "integer"
+          },
+          "modele": {
+            "type": "string"
+          },
+          "gpu": {
+            "type": "boolean"
+          },
+          "pid": {
+            "type": "integer"
+          }
+        }
+      },
       "exemple": {}
     },
     {
       "nom": "arreter",
       "description": "Arrête le moteur et libère la mémoire.",
-      "entree": { "type": "object", "properties": {} },
-      "sortie": { "type": "object", "required": ["arrete"], "properties": { "arrete": { "type": "boolean" } } },
+      "entree": {
+        "type": "object",
+        "properties": {}
+      },
+      "sortie": {
+        "type": "object",
+        "required": [
+          "arrete"
+        ],
+        "properties": {
+          "arrete": {
+            "type": "boolean"
+          }
+        }
+      },
       "exemple": {}
     },
     {
       "nom": "configurer_backend",
       "description": "Avancé : utiliser un serveur déjà présent (ollama, openai-compatible) au lieu du moteur intégré, ou y revenir.",
-      "entree": { "type": "object", "required": ["backend"], "properties": { "backend": { "type": "string", "enum": ["integre", "ollama", "openai-compatible"] }, "url": { "type": "string" } } },
-      "sortie": { "type": "object", "required": ["backend"], "properties": { "backend": { "type": "string" }, "url": { "type": "string" } } },
-      "exemple": { "backend": "integre" }
+      "entree": {
+        "type": "object",
+        "required": [
+          "backend"
+        ],
+        "properties": {
+          "backend": {
+            "type": "string",
+            "enum": [
+              "integre",
+              "ollama",
+              "openai-compatible"
+            ]
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "sortie": {
+        "type": "object",
+        "required": [
+          "backend"
+        ],
+        "properties": {
+          "backend": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "exemple": {
+        "backend": "integre"
+      }
     },
     {
       "nom": "generer",
       "description": "Rédige un texte à partir d'une consigne et de faits fournis (ancré : les chiffres sont recopiés, jamais inventés). Continuation automatique si la réponse est coupée.",
       "entree": {
         "type": "object",
-        "required": ["consigne"],
+        "required": [
+          "consigne"
+        ],
         "properties": {
-          "consigne": { "type": "string", "description": "Ce que le modèle doit faire, en français" },
-          "faits": { "type": "object", "description": "Données à utiliser (ex. le rapport d'une autre brique) — branchez ici la sortie d'une étape" },
-          "systeme": { "type": "string", "description": "Rôle / règles (défaut : rédacteur ancré, français, chiffres tels quels)" },
-          "modele": { "type": "string", "description": "Nom d'un modèle téléchargé (défaut : le modèle actif)" },
-          "max_tokens": { "type": "integer", "minimum": 16 },
-          "temperature": { "type": "number", "minimum": 0, "maximum": 2 }
+          "consigne": {
+            "type": "string",
+            "description": "Ce que le modèle doit faire, en français"
+          },
+          "faits": {
+            "type": "object",
+            "description": "Données à utiliser (ex. le rapport d'une autre brique) — branchez ici la sortie d'une étape"
+          },
+          "systeme": {
+            "type": "string",
+            "description": "Rôle / règles (défaut : rédacteur ancré, français, chiffres tels quels)"
+          },
+          "modele": {
+            "type": "string",
+            "description": "Nom d'un modèle téléchargé (défaut : le modèle actif)"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "minimum": 16
+          },
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2
+          }
         }
       },
       "sortie": "forge://texte/generation@1",
-      "exemple": { "consigne": "Explique en trois phrases ce qu'est une moyenne mobile, pour un débutant." }
+      "exemple": {
+        "consigne": "Explique en trois phrases ce qu'est une moyenne mobile, pour un débutant."
+      }
     },
     {
       "nom": "generer_json",
       "description": "Extraction sous grammaire : la sortie est contrainte à un JSON Schema et validée (tri, classement, extraction de champs).",
       "entree": {
         "type": "object",
-        "required": ["consigne", "schema"],
+        "required": [
+          "consigne",
+          "schema"
+        ],
         "properties": {
-          "consigne": { "type": "string" },
-          "schema": { "type": "object", "description": "JSON Schema de la sortie attendue" },
-          "faits": { "type": "object" },
-          "systeme": { "type": "string" },
-          "modele": { "type": "string" }
+          "consigne": {
+            "type": "string"
+          },
+          "schema": {
+            "type": "object",
+            "description": "JSON Schema de la sortie attendue"
+          },
+          "faits": {
+            "type": "object"
+          },
+          "systeme": {
+            "type": "string"
+          },
+          "modele": {
+            "type": "string"
+          }
         }
       },
-      "sortie": { "type": "object", "required": ["valeur", "modele"], "properties": { "valeur": {}, "modele": { "type": "string" }, "backend": { "type": "string" } } },
-      "exemple": { "consigne": "Classe ce message : « votre colis est livré » en important ou ignorable.", "schema": { "type": "object", "required": ["classe"], "properties": { "classe": { "type": "string", "enum": ["important", "ignorable"] } } } }
+      "sortie": {
+        "type": "object",
+        "required": [
+          "valeur",
+          "modele"
+        ],
+        "properties": {
+          "valeur": {},
+          "modele": {
+            "type": "string"
+          },
+          "backend": {
+            "type": "string"
+          }
+        }
+      },
+      "exemple": {
+        "consigne": "Classe ce message : « votre colis est livré » en important ou ignorable.",
+        "schema": {
+          "type": "object",
+          "required": [
+            "classe"
+          ],
+          "properties": {
+            "classe": {
+              "type": "string",
+              "enum": [
+                "important",
+                "ignorable"
+              ]
+            }
+          }
+        }
+      }
     }
   ],
-  "planification": { "mode": "jamais" }
+  "planification": {
+    "mode": "jamais"
+  }
 }

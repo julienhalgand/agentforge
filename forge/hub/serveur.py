@@ -330,6 +330,20 @@ class Requete(BaseHTTPRequestHandler):
             self._erreur(exc)
 
 
+def _preparer_briques() -> None:
+    """Les briques qui déclarent « preparation » se préparent toutes seules au démarrage (idempotent)."""
+    briques, _ = registre.lister_briques()
+    for m in briques:
+        if m.preparation:
+            try:
+                service = m.service(m.preparation["service"])
+            except ErreurForge as exc:
+                sys.stderr.write(f"préparation de {m.nom} impossible : {exc.cause}\n")
+                continue
+            sys.stderr.write(f"préparation automatique : {m.nom}.{service.nom}\n")
+            _lancer_en_arriere_plan(m, service.nom, m.preparation.get("entree", {}))
+
+
 def _lancer_en_arriere_plan(m: mod_manifeste.Manifeste, service: str, entree: dict) -> None:
     """Un service long (contrat tache/progres@1) : l'appel MCP bloque, on le met dans un fil ; la page suit le disque."""
 
@@ -374,6 +388,7 @@ def lancer(port: int = 8700, ouvrir: bool = True, bloquer: bool = True) -> Threa
     registre.DOSSIER_UTILISATEUR.mkdir(parents=True, exist_ok=True)
     serveur = ThreadingHTTPServer(("127.0.0.1", port), Requete)
     PLANIFICATEUR.demarrer()
+    threading.Timer(1.0, _preparer_briques).start()
     url = f"http://localhost:{port}"
     print(f"hub agentforge : {url}  (Ctrl+C pour arrêter)", file=sys.stderr)
     if ouvrir:

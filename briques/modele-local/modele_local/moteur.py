@@ -37,11 +37,12 @@ FICHIER_SERVEUR = DOSSIER_MOTEUR / "serveur.json"
 FICHIER_JOURNAL = DOSSIER_MOTEUR / "llama-server.log"
 API_VERSIONS = os.environ.get("FORGE_LLAMA_RELEASES", "https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30")
 PORT_PAR_DEFAUT = 8791
+MODELE_PAR_DEFAUT = "qwen2.5-1.5b"  # le plus petit : ça marche direct, on change ensuite si on veut
 
 # Modèles proposés : fichiers GGUF quantifiés Q4_K_M (bon compromis taille/qualité), dépôts publics sans compte.
 CATALOGUE = {
-    "qwen2.5-1.5b": {"titre": "Qwen 2.5 1.5B — très léger, CPU seul ok", "taille_go": 1.1, "url": "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"},
-    "qwen2.5-3b": {"titre": "Qwen 2.5 3B — léger, bon en français (recommandé)", "taille_go": 2.0, "url": "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf"},
+    "qwen2.5-1.5b": {"titre": "Qwen 2.5 1.5B — très léger, installé par défaut, CPU seul ok", "taille_go": 1.1, "url": "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"},
+    "qwen2.5-3b": {"titre": "Qwen 2.5 3B — léger, bon en français", "taille_go": 2.0, "url": "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf"},
     "qwen2.5-7b": {"titre": "Qwen 2.5 7B — meilleur, GPU 6 Go ou CPU lent", "taille_go": 4.7, "url": "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf"},
     "llama-3.2-3b": {"titre": "Llama 3.2 3B — léger, généraliste", "taille_go": 2.0, "url": "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf"},
     "mistral-7b": {"titre": "Mistral 7B — bon en français, GPU 6 Go ou CPU lent", "taille_go": 4.4, "url": "https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf"},
@@ -142,6 +143,10 @@ def _trouver_executable(dossier: Path) -> Path | None:
 def installer_moteur(gpu: bool, progres=None, annulee=None) -> dict:
     """Télécharge et dépose llama-server dans moteur/ ; rend moteur.json."""
     DOSSIER_MOTEUR.mkdir(parents=True, exist_ok=True)
+    deja = moteur_installe()
+    if deja and deja.get("gpu") == gpu:
+        progres and progres(100.0, f"moteur {deja['version']} déjà installé")
+        return deja
     progres and progres(0.0, "recherche de la dernière version de llama.cpp")
     try:
         requete = urllib.request.Request(API_VERSIONS, headers={"User-Agent": "agentforge/0.1", "Accept": "application/vnd.github+json"})
@@ -236,7 +241,21 @@ def serveur_en_marche() -> dict | None:
 
 
 def demarrer_serveur(modele: str, gpu: bool, port: int | None = None, contexte: int = 4096, attente_s: float = 120.0) -> dict:
-    """Lance llama-server en arrière-plan (détaché) et attend qu'il réponde."""
+    """Lance le moteur ; si la variante GPU ne démarre pas, réinstalle la variante CPU et réessaie une fois."""
+    try:
+        return _demarrer_serveur(modele, gpu, port, contexte, attente_s)
+    except ErreurForge as exc:
+        info = moteur_installe() or {}
+        if gpu and info.get("gpu"):
+            journal_precedent = exc.texte()
+            installer_moteur(False)
+            resultat = _demarrer_serveur(modele, False, port, contexte, attente_s)
+            resultat["repli_cpu"] = journal_precedent
+            return resultat
+        raise
+
+
+def _demarrer_serveur(modele: str, gpu: bool, port: int | None, contexte: int, attente_s: float) -> dict:
     port = port or PORT_PAR_DEFAUT
     en_marche = serveur_en_marche()
     if en_marche and en_marche.get("modele") == modele and en_marche.get("gpu") == gpu:
@@ -259,7 +278,7 @@ def demarrer_serveur(modele: str, gpu: bool, port: int | None = None, contexte: 
     try:
         processus = subprocess.Popen(commande, **options)
     except OSError as exc:
-        raise ErreurForge(f"impossible de lancer le moteur : {exc}", "supprimez le dossier moteur/ et réinstallez-le depuis la page") from exc
+        raise ErreurForge(f"impossible de lancer le moteur : {exc}", "supprimez le dossier moteur/ : il sera réinstallé automatiquement") from exc
     info = {"pid": processus.pid, "port": port, "modele": modele, "gpu": gpu, "commande": commande}
     ecrire_json(FICHIER_SERVEUR, info, sauvegarder=False)
     debut = time.time()
@@ -302,3 +321,19 @@ def arreter_serveur() -> bool:
         pass
     FICHIER_SERVEUR.unlink(missing_ok=True)
     return True
+
+
+# --- préparation automatique -------------------------------------------------------------
+
+def preparer(gpu: bool, progres=None, annulee=None, modele: str = MODELE_PAR_DEFAUT) -> dict:
+    """Tout ce qu'il faut pour être prêt, sans rien demander : moteur puis modèle par défaut. Idempotent."""
+    if not moteur_installe():
+        installer_moteur(gpu, progres=lambda p, e: progres and progres(p * 0.1, e), annulee=annulee)
+        if annulee and annulee():
+            raise ErreurForge("préparation interrompue", "elle reprendra au prochain démarrage")
+    else:
+        progres and progres(10.0, "moteur déjà installé")
+    if not (DOSSIER_MODELES / f"{modele}.gguf").exists():
+        telecharger_modele(modele, progres=lambda p, e: progres and progres(10 + p * 0.9, f"modèle {modele} — {e}"), annulee=annulee)
+    progres and progres(100.0, "prêt")
+    return {"moteur": moteur_installe(), "modele": modele}

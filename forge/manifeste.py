@@ -90,6 +90,7 @@ SCHEMA_MANIFESTE = {
         "page": {"type": "string"},
         "rapports": {"type": "string"},
         "taches": {"type": "string"},
+        "preparation": {"type": "object", "required": ["service"], "properties": {"service": {"type": "string"}, "entree": {"type": "object"}}},
         "modele": {
             "type": "object",
             "required": ["backend", "nom"],
@@ -218,6 +219,11 @@ class Manifeste:
     @property
     def dossier_rapports(self) -> Path:
         return self.dossier / self.brut.get("rapports", "rapports")
+
+    @property
+    def preparation(self) -> dict | None:
+        """Service à lancer automatiquement au démarrage du hub (ex. télécharger un moteur), idempotent."""
+        return self.brut.get("preparation")
 
     @property
     def dossier_taches(self) -> Path:
