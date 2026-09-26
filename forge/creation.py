@@ -260,8 +260,11 @@ def _essai(m: mod_manifeste.Manifeste, journal=None) -> list[str]:
     return echecs
 
 
-def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: int = 3, installer: bool = True, annulee=None) -> dict:
-    """Une phrase → une brique installée et testée. Rend {nom, dossier, tours, spec} ou lève une ErreurForge détaillée."""
+def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: int | None = None, installer: bool = True, annulee=None) -> dict:
+    """Une phrase → une brique installée et testée. Sans `tours`, recommence jusqu'à réussir (ou annulation),
+    en renvoyant chaque message d'erreur au modèle. Rend {nom, dossier, tours, spec}."""
+    import itertools
+
     journal = journal or (lambda _m: None)
     annulee = annulee or (lambda: False)
     consigne = (
@@ -271,10 +274,10 @@ def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: in
     )
     dernier_probleme = ""
     spec = None
-    for tour in range(1, tours + 1):
+    for tour in (range(1, tours + 1) if tours else itertools.count(1)):
         if annulee():
             raise ErreurForge("création annulée", "relance quand tu veux")
-        journal(f"tour {tour}/{tours} : le modèle {'corrige' if dernier_probleme else 'écrit'} la brique (nom, services, code) — cette étape est la plus longue")
+        journal(f"tour {tour}{'/' + str(tours) if tours else ''} : le modèle {'corrige' if dernier_probleme else 'écrit'} la brique (nom, services, code) — cette étape est la plus longue")
         demande = consigne if not dernier_probleme else (
             consigne + f"\n\nTa proposition précédente était :\n{json.dumps(spec, ensure_ascii=False)}\n\n"
             f"Elle a échoué :\n{dernier_probleme}\n\nCorrige-la et renvoie la brique complète."
@@ -327,7 +330,7 @@ def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: in
             if temporaire.exists() and (not installer or not (registre.DOSSIER_UTILISATEUR / "briques" / (spec or {}).get("nom", "")).exists()):
                 shutil.rmtree(temporaire, ignore_errors=True)
     raise ErreurForge(
-        f"la brique n'a pas pu être créée en {tours} tours",
+        f"la brique n'a pas pu être créée en {tours} tours" if tours else "création arrêtée",
         "reformule plus simplement, ou choisis un modèle plus gros (7B) dans la brique modele-local",
         dernier_probleme.splitlines()[:12],
     )
