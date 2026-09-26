@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agentforge — hub</title>
+<link rel="stylesheet" href="/statique/style.css">
+</head>
+<body>
+<header>
+  <h1>⚒ agentforge</h1>
+  <nav><a href="/" class="actif">Accueil</a><a href="/assembleur">Assembleur</a></nav>
+  <div class="droite" id="barre-etat">…</div>
+</header>
+<main>
+  <div id="problemes"></div>
+  <h2>Pipelines</h2>
+  <div class="tuiles" id="pipelines"></div>
+  <h2>Briques</h2>
+  <div class="tuiles" id="briques"></div>
+  <h2>Vues composées <button class="discret" onclick="dialogueVue()">+ nouvelle vue</button></h2>
+  <div class="tuiles" id="vues"></div>
+  <h2>Journal de l'exécution en cours</h2>
+  <div class="journal" id="journal">—</div>
+  <h2>Contrats de données</h2>
+  <div id="contrats" class="tuiles"></div>
+</main>
+
+<dialog id="dialogue-planification">
+  <form method="dialog" id="formulaire-planification">
+    <h3 style="margin-top:0">Planification</h3>
+    <div id="planification-cible" class="contrat"></div>
+    <label>Mode</label>
+    <select name="mode" onchange="modeChange(this.value)">
+      <option value="jamais">à la demande (jamais)</option>
+      <option value="quotidien">quotidien à HH:MM</option>
+      <option value="toutes_les_n_heures">toutes les N heures</option>
+    </select>
+    <div id="champ-heure"><label>Heure</label><input name="heure" type="time" value="08:00"></div>
+    <div id="champ-heures" style="display:none"><label>Toutes les N heures</label><input name="heures" type="number" min="1" value="6"></div>
+    <label><input type="checkbox" name="rattrapage" checked style="width:auto"> rattraper au démarrage si une occurrence a été manquée</label>
+    <div class="actions" style="margin-top:14px;justify-content:flex-end">
+      <button type="button" onclick="document.getElementById('dialogue-planification').close()">Annuler</button>
+      <button class="principal" type="submit">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dialogue-detail"><div id="detail-contenu"></div><div class="actions" style="margin-top:12px;justify-content:flex-end"><button onclick="document.getElementById('dialogue-detail').close()">Fermer</button></div></dialog>
+
+<dialog id="dialogue-vue">
+  <form method="dialog" id="formulaire-vue">
+    <h3 style="margin-top:0">Nouvelle vue composée</h3>
+    <label>Nom</label><input name="nom" required pattern="[a-z0-9-]+" placeholder="tableau-de-bord">
+    <label>Cadres (une brique par ligne : <code>nom-de-brique</code> pour son dernier rapport, <code>nom-de-brique:page</code> pour sa page)</label>
+    <textarea name="cadres" placeholder="rapport-marche&#10;prix-agent:page"></textarea>
+    <div class="actions" style="margin-top:14px;justify-content:flex-end">
+      <button type="button" onclick="document.getElementById('dialogue-vue').close()">Annuler</button>
+      <button class="principal" type="submit">Créer</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="/statique/commun.js"></script>
+<script>
+let ETAT = null;
+let cibleEnEdition = null;
+
+async function rafraichir() {
+  try {
+    ETAT = await api("/api/etat");
+  } catch (e) {
+    document.getElementById("problemes").replaceChildren(el("div", { class: "erreur" }, texteErreur(e)));
+    return;
+  }
+  rendre();
+}
+
+function rendre() {
+  const pb = document.getElementById("problemes");
+  pb.replaceChildren(...ETAT.problemes.map(p => el("div", { class: "probleme" }, p)));
+  document.getElementById("barre-etat").textContent =
+    (ETAT.en_cours ? `en cours : ${ETAT.en_cours}` : "inactif") + (ETAT.en_file.length ? ` · en file : ${ETAT.en_file.join(", ")}` : "") + ` · ${ETAT.dossier_utilisateur}`;
+  document.getElementById("pipelines").replaceChildren(...ETAT.pipelines.map(tuilePipeline), tuileNouveauPipeline());
+  document.getElementById("briques").replaceChildren(...ETAT.briques.map(tuileBrique));
+  document.getElementById("vues").replaceChildren(...ETAT.vues.map(v => el("div", { class: "tuile" },
+    el("div", { class: "tete" }, el("span", { class: "icone" }, "🗂"), el("div", {}, el("div", { class: "nom" }, v.nom), el("div", { class: "type" }, `${v.cadres.length} cadre(s)`))),
+    el("div", { class: "actions" }, el("a", { class: "bouton", href: `/vue/${v.nom}` }, "Ouvrir")))));
+  document.getElementById("journal").textContent = ETAT.journal.length ? ETAT.journal.join("\n") : "—";
+  document.getElementById("contrats").replaceChildren(...ETAT.contrats.map(c => el("div", { class: "tuile" },
+    el("div", { class: "tete" }, el("span", { class: "icone" }, "📄"), el("div", {}, el("div", { class: "nom" }, c.titre), el("div", { class: "contrat" }, c.reference))),
+    el("div", { class: "desc" }, c.description))));
+}
+
+function pastille(execution) {
+  return el("span", { class: `pastille ${execution.etat || ""}` });
+}
+
+function ligneEtat(x) {
+  const ex = x.execution || {};
+  const enfants = [pastille(ex), `${texteEtat(ex)} · ${dateCourte(ex.debut_ms)}`, el("span", { class: "type" }, ` · ${textePlanification(x.planification)}`)];
+  if (ex.manques && ex.manques.length) enfants.push(el("span", { class: "type" }, ` · ${ex.manques.length} manque(s)`));
+  return el("div", { class: "etat" }, ...enfants);
+}
+
+function menu(...boutons) {
+  const m = el("div", { class: "menu" });
+  const b = el("button", { class: "discret", onclick: (e) => { e.stopPropagation(); m.classList.toggle("ouvert"); } }, "⋯");
+  m.append(b, el("div", { class: "liste" }, ...boutons));
+  document.addEventListener("click", () => m.classList.remove("ouvert"));
+  return m;
+}
+
+function tuilePipeline(p) {
+  return el("div", { class: "tuile" },
+    el("div", { class: "tete" }, el("span", { class: "icone" }, p.icone), el("div", {}, el("div", { class: "nom" }, p.nom), el("div", { class: "type" }, `pipeline · ${p.etapes.length} étape(s)`)),
+      menu(
+        el("button", { onclick: () => dialoguePlanification(p.cible, p.planification) }, "🕒 Planifier"),
+        el("button", { onclick: () => detail(p.cible) }, "🔍 Dernière exécution"),
+        el("button", { onclick: () => { location.href = `/assembleur?pipeline=${encodeURIComponent(p.nom)}`; } }, "✏️ Modifier dans l'assembleur"),
+      )),
+    el("div", { class: "desc" }, p.description),
+    ligneEtat(p),
+    el("div", { class: "actions" },
+      el("button", { class: "principal", onclick: () => executer(p.cible) }, "▶ Exécuter"),
+      ...(p.execution && p.execution.erreur ? [el("button", { onclick: () => detail(p.cible) }, "⚠ voir l'erreur")] : []),
+    ));
+}
+
+function tuileNouveauPipeline() {
+  return el("div", { class: "tuile", style: "align-items:center;justify-content:center;border-style:dashed" },
+    el("a", { class: "bouton", href: "/assembleur" }, "+ Assembler un pipeline sans code"));
+}
+
+function tuileBrique(b) {
+  const dernier = b.rapports[0];
+  const actions = b.executable
+    ? [el("button", { class: "principal", onclick: () => executer(b.cible) }, "▶ Exécuter")]
+    : [el("span", { class: "type", title: "son service attend une donnée produite par une autre brique" }, "🔗 s'exécute via un pipeline")];
+  if (dernier) actions.push(el("a", { class: "bouton", href: dernier.url, target: "_blank" }, `📄 Rapport ${dernier.date}`));
+  if (b.page) actions.push(el("a", { class: "bouton", href: `/pages/${b.nom}/`, target: "_blank" }, "🖥 Ouvrir la page"));
+  const options = [
+    el("button", { onclick: () => dialoguePlanification(b.cible, b.planification) }, "🕒 Planifier"),
+    el("button", { onclick: () => detail(b.cible) }, "🔍 Dernière exécution"),
+    el("button", { onclick: () => ouvrirEditeur(b.nom) }, "📝 Ouvrir dans l'éditeur"),
+  ];
+  if (!b.livree) options.push(el("button", { onclick: () => supprimer(b.nom) }, "🗑 Supprimer (corbeille)"));
+  return el("div", { class: "tuile" },
+    el("div", { class: "tete" }, el("span", { class: "icone" }, b.icone), el("div", {}, el("div", { class: "nom" }, `${b.nom} ${b.version}`), el("div", { class: "type" }, `${b.type} · ${b.services.map(s => s.nom).join(", ")}`)), menu(...options)),
+    el("div", { class: "desc" }, b.description),
+    ligneEtat(b),
+    el("div", { class: "actions" }, ...actions));
+}
+
+async function executer(cible) {
+  try { const r = await api(`/api/executer/${cible}`, { method: "POST" }); if (!r.mise_en_file) alert(r.message); }
+  catch (e) { alert(texteErreur(e)); }
+  rafraichir();
+}
+
+async function detail(cible) {
+  const d = await api(`/api/executions/${cible}`);
+  const contenu = document.getElementById("detail-contenu");
+  contenu.replaceChildren(
+    el("h3", { style: "margin-top:0" }, cible),
+    el("div", {}, `${texteEtat(d)} — début ${dateCourte(d.debut_ms)}, fin ${dateCourte(d.fin_ms)}`),
+    d.erreur ? el("div", { class: "erreur", style: "margin-top:8px" }, texteErreur({ forge: d.erreur })) : null,
+    d.manques && d.manques.length ? el("div", { class: "probleme", style: "margin-top:8px" }, "Manques :\n" + d.manques.map(m => "  - " + m).join("\n")) : null,
+    el("div", { class: "journal", style: "margin-top:8px" }, (d.journal || []).join("\n") || "—"),
+    el("details", { style: "margin-top:8px" }, el("summary", {}, "Résultats (JSON)"), el("pre", { class: "journal" }, JSON.stringify(d.resultats || null, null, 2))),
+  );
+  document.getElementById("dialogue-detail").showModal();
+}
+
+function dialoguePlanification(cible, p) {
+  cibleEnEdition = cible;
+  const f = document.getElementById("formulaire-planification");
+  document.getElementById("planification-cible").textContent = cible;
+  f.mode.value = p.mode || "jamais"; f.heure.value = p.heure || "08:00"; f.heures.value = p.heures || 6; f.rattrapage.checked = p.rattrapage !== false;
+  modeChange(f.mode.value);
+  document.getElementById("dialogue-planification").showModal();
+}
+function modeChange(mode) {
+  document.getElementById("champ-heure").style.display = mode === "quotidien" ? "" : "none";
+  document.getElementById("champ-heures").style.display = mode === "toutes_les_n_heures" ? "" : "none";
+}
+document.getElementById("formulaire-planification").addEventListener("submit", async () => {
+  const f = document.getElementById("formulaire-planification");
+  const p = { mode: f.mode.value, rattrapage: f.rattrapage.checked };
+  if (p.mode === "quotidien") p.heure = f.heure.value;
+  if (p.mode === "toutes_les_n_heures") p.heures = parseInt(f.heures.value, 10);
+  try { await api(`/api/planification/${cibleEnEdition}`, { method: "POST", body: p }); } catch (e) { alert(texteErreur(e)); }
+  rafraichir();
+});
+
+async function ouvrirEditeur(nom) {
+  try { const r = await api(`/api/ouvrir-editeur/${nom}`, { method: "POST" }); console.log(r.commande); } catch (e) { alert(texteErreur(e)); }
+}
+async function supprimer(nom) {
+  if (!confirm(`Déplacer ${nom} vers la corbeille (~/.agentforge/.corbeille) ? Rien n'est effacé.`)) return;
+  try { const r = await api(`/api/supprimer/${nom}`, { method: "POST" }); alert(`Déplacée vers ${r.corbeille}`); } catch (e) { alert(texteErreur(e)); }
+  rafraichir();
+}
+function dialogueVue() { document.getElementById("dialogue-vue").showModal(); }
+document.getElementById("formulaire-vue").addEventListener("submit", async () => {
+  const f = document.getElementById("formulaire-vue");
+  const cadres = f.cadres.value.split("\n").map(l => l.trim()).filter(Boolean).map(l => {
+    const [brique, type] = l.split(":");
+    return { brique, type: type === "page" ? "page" : "rapport" };
+  });
+  try { await api("/api/vues", { method: "POST", body: { nom: f.nom.value, cadres } }); } catch (e) { alert(texteErreur(e)); }
+  rafraichir();
+});
+
+rafraichir();
+setInterval(rafraichir, 4000);
+</script>
+</body>
+</html>

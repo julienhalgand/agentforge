@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agentforge — vue</title>
+<link rel="stylesheet" href="/statique/style.css">
+</head>
+<body>
+<header>
+  <h1>⚒ agentforge</h1>
+  <nav><a href="/">Accueil</a><a href="/assembleur">Assembleur</a></nav>
+  <div class="droite" id="titre"></div>
+</header>
+<main>
+  <div id="retour"></div>
+  <div class="cadres" id="cadres"></div>
+</main>
+<script src="/statique/commun.js"></script>
+<script>
+async function demarrer() {
+  const nom = decodeURIComponent(location.pathname.split("/").filter(Boolean)[1] || "");
+  const vue = await api(`/api/vues/${nom}`);
+  document.getElementById("titre").textContent = `vue « ${vue.nom} »`;
+  const cadres = document.getElementById("cadres");
+  for (const c of vue.cadres) {
+    let url = null, titre = c.brique;
+    if (c.type === "page") { url = `/pages/${c.brique}/`; titre += " — page"; }
+    else {
+      const rapports = await api(`/rapports/${c.brique}/`).catch(() => []);
+      if (rapports.length) { url = rapports[0].url; titre += ` — rapport ${rapports[0].date}`; }
+      else titre += " — aucun rapport pour l'instant";
+    }
+    cadres.append(el("div", { class: "cadre" }, el("div", { class: "titre" }, titre), url ? el("iframe", { src: url, title: titre }) : el("div", { style: "padding:20px;color:var(--sourd)" }, "Exécutez la brique depuis l'accueil pour produire un rapport.")));
+  }
+}
+demarrer().catch(e => document.getElementById("retour").replaceChildren(el("div", { class: "erreur" }, texteErreur(e))));
+</script>
+</body>
+</html>

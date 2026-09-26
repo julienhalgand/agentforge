@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agentforge — assembleur</title>
+<link rel="stylesheet" href="/statique/style.css">
+</head>
+<body>
+<header>
+  <h1>⚒ agentforge</h1>
+  <nav><a href="/">Accueil</a><a href="/assembleur" class="actif">Assembleur</a></nav>
+  <div class="droite">Assembler des briques sans code : chaque étape reçoit ce que la précédente produit.</div>
+</header>
+<main>
+  <div class="ligne">
+    <div><label>Nom du pipeline</label><input id="nom" placeholder="mon-rapport-quotidien" pattern="[a-z0-9-]+"></div>
+    <div><label>Description</label><input id="description" placeholder="Ce que fait ce pipeline, en une phrase"></div>
+  </div>
+  <h2>Étapes</h2>
+  <div class="etapes" id="etapes"></div>
+  <div class="actions" style="margin-top:12px">
+    <button onclick="ajouterEtape()">+ Ajouter une étape</button>
+  </div>
+  <h2>Vérification</h2>
+  <div id="retour">Ajoutez des étapes, puis vérifiez : rien n'est lancé tant que les branchements ne sont pas valides.</div>
+  <div class="actions" style="margin-top:12px">
+    <button onclick="verifier()">✔ Vérifier</button>
+    <button class="principal" onclick="enregistrer()">💾 Enregistrer</button>
+    <button onclick="enregistrerEtExecuter()">▶ Enregistrer et exécuter</button>
+    <button class="discret" onclick="afficherJson()">{ } Voir le JSON</button>
+  </div>
+  <details style="margin-top:12px"><summary>JSON du pipeline</summary><pre class="journal" id="json"></pre></details>
+</main>
+<script src="/statique/commun.js"></script>
+<script>
+let ETAT = null;
+let ETAPES = []; // { id, brique, service, entree: {champ: valeur | "$id" | "$id.champ"} }
+
+function services(nomBrique) {
+  const b = ETAT.briques.find(x => x.nom === nomBrique);
+  return b ? b.services : [];
+}
+function service(nomBrique, nomService) {
+  return services(nomBrique).find(s => s.nom === nomService);
+}
+function schemaEntree(s) {
+  return typeof s.entree === "object" ? s.entree : { type: "object", properties: {} };
+}
+function contratSortie(s) {
+  return nomContrat(s.sortie);
+}
+
+function ajouterEtape() {
+  const premiere = ETAT.briques[0];
+  ETAPES.push({ id: `etape${ETAPES.length + 1}`, brique: premiere ? premiere.nom : "", service: premiere && premiere.services[0] ? premiere.services[0].nom : "", entree: {} });
+  const e = ETAPES[ETAPES.length - 1];
+  appliquerExemple(e);
+  rendre();
+}
+function appliquerExemple(e) {
+  const s = service(e.brique, e.service);
+  e.entree = s && s.exemple ? { ...s.exemple } : {};
+}
+
+// Étapes précédentes dont la sortie peut alimenter ce champ (même contrat, ou champ d'un contrat).
+function sourcesCompatibles(indice, schemaChamp) {
+  const cible = nomContrat(schemaChamp);
+  const options = [];
+  for (let i = 0; i < indice; i++) {
+    const prev = ETAPES[i];
+    const s = service(prev.brique, prev.service);
+    if (!s) continue;
+    const sortie = contratSortie(s);
+    if (sortie === cible) options.push({ valeur: `$${prev.id}`, libelle: `résultat de « ${prev.id} » (${sortie})` });
+    const contrat = ETAT.contrats.find(c => c.reference === sortie);
+    if (contrat && typeof schemaChamp === "object" && !schemaChamp.$ref && schemaChamp.type && schemaChamp.type !== "object") {
+      // champs simples d'un contrat : on propose $id.champ quand le type correspond
+      for (const [nom, sch] of Object.entries(contratProprietes(sortie))) {
+        if (sch.type === schemaChamp.type) options.push({ valeur: `$${prev.id}.${nom}`, libelle: `${prev.id}.${nom} (${sch.type})` });
+      }
+    }
+  }
+  return options;
+}
+const PROPRIETES_CONTRATS = {};
+function contratProprietes(reference) { return PROPRIETES_CONTRATS[reference] || {}; }
+
+function champ(e, indice, nom, sch, requis) {
+  const valeur = e.entree[nom];
+  const estRef = typeof valeur === "string" && valeur.startsWith("$");
+  const conteneur = el("div", { class: "champ" });
+  const etiquette = el("label", {}, nom + (requis ? " *" : ""));
+  conteneur.append(etiquette);
+  const sources = sourcesCompatibles(indice, sch);
+  const estContrat = typeof sch === "string" || (sch && sch.$ref) || (sch && sch.type === "object");
+  let entree;
+  if (estContrat) {
+    entree = el("select", { onchange: (ev) => { e.entree[nom] = ev.target.value || undefined; } },
+      el("option", { value: "" }, sources.length ? "— choisir la source —" : "— aucune étape précédente compatible —"),
+      ...sources.map(o => el("option", { value: o.valeur, selected: valeur === o.valeur ? "selected" : null }, o.libelle)));
+    conteneur.append(entree, el("small", {}, `attend ${nomContrat(sch)}`));
+  } else if (sch.enum) {
+    entree = el("select", { onchange: (ev) => { e.entree[nom] = ev.target.value; } },
+      ...sch.enum.map(v => el("option", { value: v, selected: valeur === v ? "selected" : null }, v)));
+    if (valeur === undefined && sch.enum.length) e.entree[nom] = sch.default !== undefined ? sch.default : sch.enum[0];
+    conteneur.append(entree, el("small", {}, sch.description || ""));
+  } else if (sch.type === "boolean") {
+    entree = el("select", { onchange: (ev) => { e.entree[nom] = ev.target.value === "true"; } },
+      el("option", { value: "false", selected: !valeur ? "selected" : null }, "non"), el("option", { value: "true", selected: valeur ? "selected" : null }, "oui"));
+    conteneur.append(entree, el("small", {}, sch.description || ""));
+  } else if (sch.type === "array") {
+    entree = el("input", { value: Array.isArray(valeur) ? valeur.join(", ") : (valeur || ""), placeholder: "valeurs séparées par des virgules",
+      onchange: (ev) => { e.entree[nom] = ev.target.value.split(",").map(x => x.trim()).filter(Boolean); } });
+    conteneur.append(entree, el("small", {}, sch.description || "liste"));
+  } else {
+    const estNombre = sch.type === "number" || sch.type === "integer";
+    entree = el("input", { type: estNombre ? "number" : "text", step: sch.type === "number" ? "any" : null, value: estRef ? "" : (valeur ?? sch.default ?? ""), min: sch.minimum ?? null, max: sch.maximum ?? null,
+      onchange: (ev) => { e.entree[nom] = ev.target.value === "" ? undefined : (estNombre ? Number(ev.target.value) : ev.target.value); } });
+    conteneur.append(entree);
+    if (sources.length) {
+      conteneur.append(el("select", { style: "margin-top:4px", onchange: (ev) => { if (ev.target.value) { e.entree[nom] = ev.target.value; rendre(); } } },
+        el("option", { value: "" }, estRef ? `branché sur ${valeur}` : "ou brancher sur…"), ...sources.map(o => el("option", { value: o.valeur }, o.libelle))));
+    }
+    conteneur.append(el("small", {}, sch.description || sch.type || ""));
+  }
+  return conteneur;
+}
+
+function rendre() {
+  const conteneur = document.getElementById("etapes");
+  conteneur.replaceChildren();
+  ETAPES.forEach((e, i) => {
+    if (i > 0) conteneur.append(el("div", { class: "fleche" }, "↓"));
+    const s = service(e.brique, e.service);
+    const sch = s ? schemaEntree(s) : { properties: {} };
+    const requis = new Set(sch.required || []);
+    const bloc = el("div", { class: "etape" },
+      el("div", { class: "tete" },
+        el("span", { class: "numero" }, String(i + 1)),
+        el("input", { value: e.id, style: "max-width:160px", title: "identifiant de l'étape", onchange: (ev) => { e.id = ev.target.value.replace(/[^a-zA-Z0-9_-]/g, ""); rendre(); } }),
+        el("select", { onchange: (ev) => { e.brique = ev.target.value; e.service = (services(e.brique)[0] || {}).nom || ""; appliquerExemple(e); rendre(); } },
+          ...ETAT.briques.map(b => el("option", { value: b.nom, selected: b.nom === e.brique ? "selected" : null }, `${b.icone} ${b.nom}`))),
+        el("select", { onchange: (ev) => { e.service = ev.target.value; appliquerExemple(e); rendre(); } },
+          ...services(e.brique).map(x => el("option", { value: x.nom, selected: x.nom === e.service ? "selected" : null }, x.nom))),
+        el("span", { class: "contrat" }, s ? `→ ${contratSortie(s)}` : ""),
+        el("button", { class: "discret", style: "margin-left:auto", onclick: () => { ETAPES.splice(i, 1); rendre(); } }, "✕"),
+      ),
+      s ? el("div", { class: "type", style: "margin-bottom:8px" }, s.description) : null,
+      el("div", { class: "champs" }, ...Object.entries(sch.properties || {}).map(([nom, schema]) => champ(e, i, nom, schema, requis.has(nom)))),
+    );
+    conteneur.append(bloc);
+  });
+  document.getElementById("json").textContent = JSON.stringify(pipelineJson(), null, 2);
+}
+
+function pipelineJson() {
+  return {
+    forge: 1, type: "pipeline", version: "0.1.0",
+    nom: document.getElementById("nom").value.trim(),
+    description: document.getElementById("description").value.trim(),
+    planification: { mode: "jamais" },
+    etapes: ETAPES.map(e => ({ id: e.id, brique: e.brique, service: e.service, entree: Object.fromEntries(Object.entries(e.entree).filter(([, v]) => v !== undefined && v !== "")) })),
+  };
+}
+
+function retour(message, classe) {
+  document.getElementById("retour").replaceChildren(el("div", { class: classe }, message));
+}
+async function verifier() {
+  const p = pipelineJson();
+  if (!p.nom) return retour("Donnez un nom au pipeline (lettres minuscules, chiffres, tirets).", "erreur");
+  try { const r = await api("/api/verifier", { method: "POST", body: p }); retour(`Pipeline valide : ${r.etapes.map(e => `${e.id} = ${e.brique}.${e.service}`).join(" → ")}`, "ok"); return true; }
+  catch (e) { retour(texteErreur(e), "erreur"); return false; }
+}
+async function enregistrer() {
+  if (!(await verifier())) return false;
+  try { const r = await api("/api/pipelines", { method: "POST", body: pipelineJson() }); retour(`Enregistré : ${r.fichier}`, "ok"); return true; }
+  catch (e) { retour(texteErreur(e), "erreur"); return false; }
+}
+async function enregistrerEtExecuter() {
+  if (!(await enregistrer())) return;
+  const nom = pipelineJson().nom;
+  try { await api(`/api/executer/pipeline:${nom}`, { method: "POST" }); location.href = "/"; } catch (e) { retour(texteErreur(e), "erreur"); }
+}
+function afficherJson() { document.querySelector("details").open = true; }
+
+async function demarrer() {
+  ETAT = await api("/api/etat");
+  // propriétés des contrats (fournies par /api/etat), pour proposer « $etape.champ »
+  for (const c of ETAT.contrats) PROPRIETES_CONTRATS[c.reference] = c.proprietes || {};
+  for (const brique of ETAT.briques) for (const s of brique.services) if (typeof s.sortie === "object" && s.sortie.properties) PROPRIETES_CONTRATS[nomContrat(s.sortie)] = s.sortie.properties;
+  const params = new URLSearchParams(location.search);
+  const existant = params.get("pipeline") && ETAT.pipelines.find(p => p.nom === params.get("pipeline"));
+  if (existant) {
+    document.getElementById("nom").value = existant.nom;
+    document.getElementById("description").value = existant.description || "";
+    ETAPES = existant.etapes.map(e => ({ id: e.id, brique: e.brique, service: e.service, entree: { ...(e.entree || {}) } }));
+  } else if (!ETAPES.length) {
+    ajouterEtape();
+  }
+  rendre();
+}
+demarrer().catch(e => retour(texteErreur(e), "erreur"));
+</script>
+</body>
+</html>
