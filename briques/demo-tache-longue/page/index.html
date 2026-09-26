@@ -57,7 +57,7 @@ async function rafraichir() {
   const t = await api(`/taches/${BRIQUE}/${suivi}`);
   const bloc = document.getElementById("suivi"); bloc.className = t.etat;
   document.getElementById("remplissage").style.width = `${t.pourcentage}%`;
-  document.getElementById("etat").textContent = `${t.tache} : ${t.etat} — ${t.pourcentage}% — ${t.etape || ""}` + (t.eta_s !== undefined && t.etat === "en_cours" ? ` — reste ≈ ${Math.round(t.eta_s)} s` : "") + (t.resultat ? `\nrésultat : ${t.resultat}` : "") + (t.erreur ? `\nerreur : ${t.erreur}` : "");
+  document.getElementById("etat").textContent = `${t.tache} : ${t.etat} — ${t.pourcentage}% — ${t.etape || ""}` + (t.eta_s !== undefined && t.etat === "en_cours" ? ` — reste ≈ ${Math.round(t.eta_s)} s` : "") + (t.resultat ? `\nrésultat : ${t.resultat}` : "") + (t.erreur ? `\nerreur : ${t.erreur_texte || t.erreur}` : "");
   document.getElementById("annuler").disabled = t.etat !== "en_cours";
   document.getElementById("lancer").disabled = t.etat === "en_cours";
 }

@@ -101,7 +101,10 @@ class Tache:
     def _lire(self) -> dict:
         if self.fichier_progres.exists():
             try:
-                return lire_json(self.fichier_progres)
+                etat = lire_json(self.fichier_progres)
+                if etat.get("erreur") and self.fichier_erreur.exists():
+                    etat["erreur_texte"] = self.fichier_erreur.read_text(encoding="utf-8").strip()  # la cause, lisible sur place
+                return etat
             except (OSError, json.JSONDecodeError):
                 pass
         return {"tache": self.nom, "etat": "en_attente", "pourcentage": 0.0, "mis_a_jour_ms": 0}

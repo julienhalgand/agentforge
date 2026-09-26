@@ -58,6 +58,7 @@
     <div style="margin-top:8px"><button class="principal" id="installer" onclick="installer()">⬇ Télécharger</button><button id="annuler" onclick="annuler()" disabled>■ Annuler</button></div>
     <div class="barre"><div id="remplissage"></div></div>
     <small id="progres">—</small>
+    <div id="erreur-tache" class="erreur" style="display:none;margin-top:8px"></div>
   </div>
 </div>
 
@@ -115,7 +116,9 @@ async function rafraichirTache() {
   if (!tacheSuivie) return;
   const t = await api(`/taches/${BRIQUE}/${tacheSuivie}`);
   document.getElementById("remplissage").style.width = `${t.pourcentage || 0}%`;
-  document.getElementById("progres").textContent = `${t.tache} : ${t.etat} — ${t.pourcentage || 0} % — ${t.etape || ""}` + (t.erreur ? ` — voir ${t.erreur}` : "");
+  document.getElementById("progres").textContent = `${t.tache} : ${t.etat} — ${t.pourcentage || 0} % — ${t.etape || ""}`;
+  const bloc = document.getElementById("erreur-tache");
+  if (t.etat === "echec") { bloc.style.display = ""; bloc.textContent = t.erreur_texte || `échec — voir ${t.erreur}`; } else bloc.style.display = "none";
   document.getElementById("annuler").disabled = t.etat !== "en_cours";
   document.getElementById("installer").disabled = t.etat === "en_cours";
   if (t.etat === "termine") rafraichirEtat();
