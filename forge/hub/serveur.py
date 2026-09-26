@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import time
+import traceback
 import os
 import shutil
 import subprocess
@@ -314,18 +315,9 @@ class Requete(BaseHTTPRequestHandler):
                 phrase = (corps.get("phrase") or "").strip()
                 if len(phrase) < 6:
                     raise ErreurForge("dis ce que tu veux, en une phrase", "ex. « je veux un métronome » ou « chaque matin, le prix du bitcoin et un rapport »")
-                decision = mod_creation.decider(phrase, _generer_json_modele)
-                if decision["action"] == "composer":
-                    journal: list[str] = []
-                    try:
-                        pipeline = mod_creation.composer_pipeline(phrase, _generer_json_modele, journal=journal.append)
-                        fichier = mod_creation.enregistrer_pipeline(pipeline)
-                        return self._json({"action": "composer", "raison": decision["raison"], "pipeline": pipeline, "fichier": str(fichier), "journal": journal})
-                    except ErreurForge:
-                        pass  # les briques ne suffisent pas : on en crée une
-                identifiant = f"creation-{int(time.time())}"
-                threading.Thread(target=_creer_brique_en_tache, args=(identifiant, phrase), daemon=True).start()
-                return self._json({"action": "creer", "raison": decision["raison"], "id": identifiant})
+                identifiant = f"demande-{int(time.time())}"
+                threading.Thread(target=_demander_en_tache, args=(identifiant, phrase), daemon=True).start()
+                return self._json({"ok": True, "id": identifiant})
             if chemin == "/api/composer":
                 corps = self._corps_json()
                 phrase = (corps.get("phrase") or "").strip()
@@ -389,26 +381,56 @@ def _generer_json_modele(consigne: str, schema: dict, systeme: str):
         return client.appeler("generer_json", {"consigne": consigne, "schema": schema, "systeme": systeme})["valeur"]
 
 
-def _creer_brique_en_tache(identifiant: str, phrase: str) -> None:
+def _demander_en_tache(identifiant: str, phrase: str) -> None:
+    """Toute la demande dans un fil suivi par la page : 1 décision, 2 assemblage ou création, 3 installation."""
     tache = mod_taches.Tache(DOSSIER_CREATIONS, identifiant)
-    tache.demarrer("le modèle réfléchit…")
-    etapes = []
+    tache.demarrer("étape 1/3 — je regarde ce que les briques installées savent faire")
+    etapes: list[str] = []
 
     def journal(message: str) -> None:
         etapes.append(f"{time.strftime('%H:%M:%S')} {message}")
-        tache.progres(min(90, 8 * len(etapes)), message, force=True)
         ecrire_json(DOSSIER_CREATIONS / f"{identifiant}.journal.json", etapes, sauvegarder=False)
+        tache.progres(min(92, 6 * len(etapes)), message, force=True)
 
     try:
         journal(f"demande : « {phrase} »")
-        resultat = mod_creation.creer_brique(phrase, _generer_json_modele, journal=journal, annulee=tache.annulee)
-        etat = tache.terminer(resultat["dossier"], etape=f"brique « {resultat['nom']} » créée et testée")
-        ecrire_json(DOSSIER_CREATIONS / f"{identifiant}.resultat.json", {**resultat, "journal": etapes}, sauvegarder=False)
+        journal("étape 1/3 — le modèle local décide : assembler des briques existantes, ou en créer une (10 s à 1 min ; le moteur démarre au premier appel)")
+        decision = mod_creation.decider(phrase, _generer_json_modele)
+        journal(f"décision : {decision['action']} — {decision['raison']}")
+        if decision["action"] == "composer":
+            journal("étape 2/3 — assemblage des briques existantes")
+            try:
+                pipeline = mod_creation.composer_pipeline(phrase, _generer_json_modele, journal=lambda m: journal("  " + m))
+                fichier = mod_creation.enregistrer_pipeline(pipeline)
+                journal(f"étape 3/3 — pipeline « {pipeline['nom']} » enregistré : {fichier}")
+                ecrire_json(DOSSIER_CREATIONS / f"{identifiant}.resultat.json", {"action": "composer", "pipeline": pipeline, "journal": etapes}, sauvegarder=False)
+                tache.terminer(str(fichier), etape=f"pipeline « {pipeline['nom']} » prêt")
+                return
+            except ErreurForge as exc:
+                journal("les briques existantes ne suffisent pas (" + exc.cause + ") : on crée une brique")
+        journal("étape 2/3 — création d'une nouvelle brique (le modèle écrit, agentforge vérifie et essaie ; jusqu'à 3 tours)")
+        resultat = mod_creation.creer_brique(phrase, _generer_json_modele, journal=lambda m: journal("  " + m), annulee=tache.annulee)
+        journal(f"étape 3/3 — brique « {resultat['nom']} » installée")
+        ecrire_json(DOSSIER_CREATIONS / f"{identifiant}.resultat.json", {"action": "creer", **resultat, "journal": etapes}, sauvegarder=False)
+        tache.terminer(resultat["dossier"], etape=f"brique « {resultat['nom']} » créée et testée")
     except ErreurForge as exc:
         if tache.annulee():
-            tache.annuler("création annulée")
+            tache.annuler("demande annulée")
         else:
             tache.echouer(exc.texte())
+    except Exception as exc:  # jamais un fil mort sans explication
+        tache.echouer(f"erreur interne : {exc}\n" + "\n".join(traceback.format_exc().splitlines()[-8:]))
+
+
+def _creer_brique_en_tache(identifiant: str, phrase: str) -> None:
+    _demander_en_tache(identifiant, phrase)
+
+
+def _clore_creations_interrompues() -> None:
+    """Au démarrage : une création encore « en cours » vient d'un hub arrêté en plein travail ; on le dit."""
+    for etat in mod_taches.lister_taches(DOSSIER_CREATIONS):
+        if etat.get("etat") == "en_cours":
+            mod_taches.Tache(DOSSIER_CREATIONS, etat["tache"]).echouer("création interrompue par un redémarrage du hub — relance-la, ça repart de zéro")
 
 
 def _preparer_briques() -> None:
@@ -469,6 +491,7 @@ def lancer(port: int = 8700, ouvrir: bool = True, bloquer: bool = True) -> Threa
     registre.DOSSIER_UTILISATEUR.mkdir(parents=True, exist_ok=True)
     serveur = ThreadingHTTPServer(("127.0.0.1", port), Requete)
     PLANIFICATEUR.demarrer()
+    _clore_creations_interrompues()
     threading.Timer(1.0, _preparer_briques).start()
     url = f"http://localhost:{port}"
     print(f"hub agentforge : {url}  (Ctrl+C pour arrêter)", file=sys.stderr)

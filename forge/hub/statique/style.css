@@ -153,3 +153,47 @@ details.dev { margin-top: 40px; } details.dev > summary { font-size: 13px; }
   .app.agent .app-icone { background: linear-gradient(150deg, #6b4a12, #4a330c); }
   .app.vue .app-icone { background: linear-gradient(150deg, #4a3d8a, #35296b); }
 }
+
+/* ===== l'écran d'un iPhone ===== */
+body { background: #0b0d12 radial-gradient(120% 90% at 20% 0%, #f7a441 0%, #e4573f 28%, #8d3f8c 55%, #1f2a6b 80%, #0b0d12 100%) fixed; min-height: 100vh; }
+@media (prefers-color-scheme: light) { body { background: #cfd8ea radial-gradient(120% 90% at 20% 0%, #ffd27a 0%, #ff8e6a 28%, #b98ad4 55%, #6f8fd8 80%, #cfd8ea 100%) fixed; } }
+.barre-statut { display: flex; justify-content: space-between; max-width: 560px; margin: 0 auto; padding: 14px 28px 0; color: #fff; font-weight: 600; font-size: 15px; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+main.ecran-iphone { max-width: 560px; margin: 0 auto; padding: 18px 22px 120px; }
+.widgets { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 26px; }
+.widget { display: block; aspect-ratio: 1 / 1; border-radius: 24px; padding: 16px; color: #fff; text-decoration: none; box-shadow: 0 10px 30px rgba(0,0,0,.25); position: relative; overflow: hidden; }
+.widget-modele { background: linear-gradient(160deg, #3d7bff, #1e40af); }
+.widget-rapport { background: linear-gradient(160deg, #2c2c2e, #111); }
+.widget-titre { font-size: 13px; font-weight: 600; opacity: .85; }
+.widget-grand { font-size: 36px; font-weight: 700; letter-spacing: -.02em; margin-top: 8px; line-height: 1.05; overflow-wrap: anywhere; }
+.widget-sous { font-size: 13px; opacity: .85; position: absolute; left: 16px; right: 16px; bottom: 14px; }
+.grille-icones { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px 12px; justify-items: center; }
+.ecran-iphone .app { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.45); }
+.ecran-iphone .app-icone { width: 62px; height: 62px; border-radius: 15px; font-size: 32px; background: linear-gradient(160deg, #ffffff, #dfe6f2); box-shadow: 0 6px 16px rgba(0,0,0,.28); }
+.ecran-iphone .app.pipeline .app-icone { background: linear-gradient(160deg, #62b8ff, #1f6fe0); }
+.ecran-iphone .app.agent .app-icone { background: linear-gradient(160deg, #ffd166, #f28c1e); }
+.ecran-iphone .app.vue .app-icone { background: linear-gradient(160deg, #c8b6ff, #7c5cff); }
+.ecran-iphone .app.plus .app-icone { background: rgba(255,255,255,.22); color: #fff; font-size: 36px; font-weight: 300; backdrop-filter: blur(12px); }
+.ecran-iphone .app-nom { font-size: 12px; font-weight: 500; max-width: 80px; }
+.ecran-iphone .app-icone .pastille { border-color: rgba(0,0,0,.35); }
+.points { display: flex; justify-content: center; gap: 8px; margin: 28px 0 10px; }
+.points span { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,.45); } .points span.actif { background: #fff; }
+.ecran-iphone details.dev { margin-top: 30px; } .ecran-iphone details.dev > summary { color: rgba(255,255,255,.75); }
+.ecran-iphone .probleme { margin-bottom: 14px; }
+/* dock */
+.dock { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 22px; padding: 12px 22px; border-radius: 30px; background: rgba(255,255,255,.22); backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%); box-shadow: 0 10px 30px rgba(0,0,0,.25); z-index: 20; }
+.dock-item { display: flex; flex-direction: column; align-items: center; gap: 3px; text-decoration: none; color: #fff; }
+.dock-icone { width: 56px; height: 56px; border-radius: 14px; display: grid; place-items: center; font-size: 28px; background: linear-gradient(160deg, #ffffff, #dfe6f2); box-shadow: 0 4px 12px rgba(0,0,0,.25); transition: transform .12s; }
+.dock-item:hover .dock-icone { transform: translateY(-4px) scale(1.06); }
+.dock-item.actif .dock-icone { outline: 3px solid rgba(255,255,255,.75); }
+.dock-nom { font-size: 11px; font-weight: 500; text-shadow: 0 1px 2px rgba(0,0,0,.45); }
+/* les autres pages : une feuille de verre sur le fond */
+.barre-titre { display: flex; align-items: center; gap: 14px; max-width: 900px; margin: 0 auto; padding: 16px 20px 6px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+.barre-titre h1 { font-size: 30px; font-weight: 700; letter-spacing: -.02em; margin: 0; text-transform: capitalize; }
+.barre-titre .retour { color: #fff; font-weight: 600; font-size: 15px; }
+main:not(.ecran-iphone) { max-width: 900px; margin: 0 auto 0; padding: 8px 20px 130px; }
+main:not(.ecran-iphone) > * { position: relative; }
+main:not(.ecran-iphone) h2 { color: rgba(255,255,255,.8); text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+main:not(.ecran-iphone) .type, main:not(.ecran-iphone) .desc { color: var(--sourd); }
+.entete-detail h1, .entete-detail .type, #actions-brique > p, #actions > p { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+.entete-detail .etat { color: rgba(255,255,255,.85); }
+@media (max-width: 480px) { .grille-icones { gap: 18px 8px; } .dock { gap: 14px; padding: 10px 14px; } .dock-icone { width: 50px; height: 50px; font-size: 24px; } }

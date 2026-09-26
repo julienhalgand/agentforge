@@ -13,8 +13,11 @@ async function api(chemin, options = {}) {
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
   const donnees = await reponse.json().catch(() => ({ erreur: { cause: `réponse non JSON (${reponse.status})`, remede: "" } }));
-  if (!reponse.ok || donnees.erreur) {
-    const e = donnees.erreur || { cause: `HTTP ${reponse.status}`, remede: "" };
+  // Une vraie erreur est un objet { cause, remede } ; un état de tâche en échec porte aussi un champ « erreur »
+  // (nom du fichier .erreur.txt) qui n'en est pas une.
+  const erreurReelle = donnees && typeof donnees.erreur === "object" && donnees.erreur !== null && "cause" in donnees.erreur;
+  if (!reponse.ok || erreurReelle) {
+    const e = erreurReelle ? donnees.erreur : { cause: `HTTP ${reponse.status}`, remede: "" };
     const erreur = new Error(e.cause);
     erreur.forge = e;
     throw erreur;
@@ -65,4 +68,11 @@ function nomContrat(schema) {
   if (schema && schema.$ref) return schema.$ref;
   if (schema && schema.title) return schema.title;
   return "schéma en ligne";
+}
+
+
+// Le dock, comme en bas d'un iPhone : présent sur toutes les pages.
+function dockHTML(actif) {
+  const items = [["accueil", "/", "🏠", "Accueil"], ["creer", "/creer", "✨", "Créer"], ["assembleur", "/assembleur", "🧩", "Assembler"], ["modele", "/brique/modele-local", "🧠", "Modèle"]];
+  return `<nav class="dock">${items.map(([id, url, ic, nom]) => `<a href="${url}" class="dock-item${id === actif ? " actif" : ""}" title="${nom}"><span class="dock-icone">${ic}</span><span class="dock-nom">${nom}</span></a>`).join("")}</nav>`;
 }

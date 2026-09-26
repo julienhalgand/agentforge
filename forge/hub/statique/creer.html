@@ -13,10 +13,7 @@
 </style>
 </head>
 <body>
-<header>
-  <h1>agentforge</h1>
-  <nav><a href="/">Accueil</a><a href="/assembleur">Assembleur</a><a href="/creer" class="actif">Créer</a></nav>
-</header>
+<header class="barre-titre"><h1>Créer</h1></header>
 <main>
   <div class="carte" style="margin-top:8px">
     <h3>Dis ce que tu veux</h3>
@@ -36,31 +33,34 @@
   </div>
 </main>
 <script src="/statique/commun.js"></script>
+<script>document.body.insertAdjacentHTML("beforeend", dockHTML("creer"));</script>
 <script>
 function exemple(id, texte) { document.getElementById(id).value = texte; }
 let creationEnCours = localStorage.getItem("creation-en-cours") || null;
 
 async function demander() {
   const phrase = document.getElementById("phrase").value.trim();
-  const bouton = document.getElementById("demander"), etat = document.getElementById("etat"), retour = document.getElementById("retour");
-  bouton.disabled = true; etat.textContent = "je regarde ce qui existe déjà…"; retour.replaceChildren();
+  const bouton = document.getElementById("demander"), retour = document.getElementById("retour");
+  localStorage.removeItem("creation-en-cours"); creationEnCours = null;
+  bouton.disabled = true; retour.replaceChildren();
   try {
     const r = await api("/api/demander", { method: "POST", body: { phrase } });
-    if (r.action === "composer") {
-      const p = r.pipeline;
-      retour.replaceChildren(
-        el("div", { class: "ok" }, `Assemblé avec les briques existantes : ${p.etapes.map(e => `${e.brique}.${e.service}`).join(" → ")} · ${textePlanification(p.planification)}`),
-        el("small", {}, r.raison),
-        el("div", { class: "actions", style: "margin-top:10px" },
-          el("button", { class: "principal", onclick: async () => { await api(`/api/executer/pipeline:${p.nom}`, { method: "POST" }); location.href = `/pipeline/${p.nom}`; } }, "▶ Lancer"),
-          el("a", { class: "bouton", href: `/assembleur?pipeline=${encodeURIComponent(p.nom)}` }, "Voir le détail")));
-      bouton.disabled = false; etat.textContent = "";
-    } else {
-      creationEnCours = r.id; localStorage.setItem("creation-en-cours", r.id);
-      retour.replaceChildren(el("small", {}, `Nouvelle brique : ${r.raison}`));
-      suivre();
-    }
-  } catch (e) { retour.replaceChildren(el("div", { class: "erreur" }, texteErreur(e))); bouton.disabled = false; etat.textContent = ""; }
+    creationEnCours = r.id; localStorage.setItem("creation-en-cours", r.id);
+    suivre();
+  } catch (e) { retour.replaceChildren(el("div", { class: "erreur" }, texteErreur(e))); bouton.disabled = false; }
+}
+
+function resultatTermine(t) {
+  const d = t.resultat_detail || {};
+  if (d.action === "composer" && d.pipeline) {
+    const p = d.pipeline;
+    return [el("div", { class: "ok" }, `Assemblé avec les briques existantes : ${p.etapes.map(e => `${e.brique}.${e.service}`).join(" → ")} · ${textePlanification(p.planification)}`),
+      el("div", { class: "actions", style: "margin-top:10px" },
+        el("button", { class: "principal", onclick: async () => { await api(`/api/executer/pipeline:${p.nom}`, { method: "POST" }); location.href = `/pipeline/${p.nom}`; } }, "▶ Lancer"),
+        el("a", { class: "bouton", href: `/assembleur?pipeline=${encodeURIComponent(p.nom)}` }, "Voir le détail"))];
+  }
+  return [el("div", { class: "ok" }, `${t.etape} en ${d.tours || "?"} tour(s)`),
+    el("div", { class: "actions", style: "margin-top:10px" }, el("a", { class: "bouton principal", href: `/brique/${d.nom}` }, `Ouvrir ${d.nom} ›`), el("a", { class: "bouton", href: "/" }, "Accueil"))];
 }
 
 async function suivre() {
@@ -75,6 +75,7 @@ async function suivre() {
     retour.replaceChildren(el("div", { class: "probleme" }, "Création annulée."));
     localStorage.removeItem("creation-en-cours"); creationEnCours = null; return;
   }
+  if (t.etat === "en_attente" || t.etat === "illisible") { localStorage.removeItem("creation-en-cours"); creationEnCours = null; bouton.disabled = false; return; }
   if (t.etat === "en_cours") {
     bouton.disabled = true; barre.style.display = ""; document.getElementById("barre").style.width = `${t.pourcentage}%`;
     const depuis = Math.max(0, Math.round((Date.now() - (t.mis_a_jour_ms || Date.now())) / 1000));
@@ -83,9 +84,7 @@ async function suivre() {
   } else if (t.etat === "termine") {
     bouton.disabled = false; barre.style.display = "none"; etat.textContent = ""; direct.style.display = "none";
     const d = t.resultat_detail || {};
-    retour.replaceChildren(
-      el("div", { class: "ok" }, `${t.etape} en ${d.tours || "?"} tour(s)`),
-      el("div", { class: "actions", style: "margin-top:10px" }, el("a", { class: "bouton principal", href: `/brique/${d.nom}` }, `Ouvrir ${d.nom} ›`), el("a", { class: "bouton", href: "/" }, "Accueil")),
+    retour.replaceChildren(...resultatTermine(t),
       (t.journal || d.journal) ? el("details", { style: "margin-top:8px" }, el("summary", {}, "ce qui s'est passé"), el("div", { class: "journal" }, (t.journal || d.journal).join("\n"))) : null);
     localStorage.removeItem("creation-en-cours"); creationEnCours = null;
   } else if (t.etat === "echec") {

@@ -7,11 +7,7 @@
 <link rel="stylesheet" href="/statique/style.css">
 </head>
 <body>
-<header>
-  <h1>agentforge</h1>
-  <nav><a href="/">Accueil</a><a href="/assembleur" class="actif">Assembleur</a><a href="/creer">Créer</a></nav>
-  <div class="droite">Assembler des briques sans code : chaque étape reçoit ce que la précédente produit.</div>
-</header>
+<header class="barre-titre"><a href="/" class="retour">‹ Accueil</a><h1 id="titre-page">Assembler</h1></header>
 <main>
   <div class="ligne">
     <div><label>Nom du pipeline</label><input id="nom" placeholder="mon-rapport-quotidien" pattern="[a-z0-9-]+"></div>
@@ -33,6 +29,7 @@
   <details style="margin-top:12px"><summary>JSON du pipeline</summary><pre class="journal" id="json"></pre></details>
 </main>
 <script src="/statique/commun.js"></script>
+<script>document.body.insertAdjacentHTML("beforeend", dockHTML("assembleur"));</script>
 <script>
 let ETAT = null;
 let ETAPES = []; // { id, brique, service, entree: {champ: valeur | "$id" | "$id.champ"} }

@@ -7,11 +7,7 @@
 <link rel="stylesheet" href="/statique/style.css">
 </head>
 <body>
-<header>
-  <h1>agentforge</h1>
-  <nav><a href="/">Accueil</a><a href="/assembleur">Assembleur</a><a href="/creer">Créer</a></nav>
-  <div class="droite" id="barre-etat"></div>
-</header>
+<header class="barre-titre"><a href="/" class="retour">‹ Accueil</a><h1 id="titre-page"></h1><span class="retour" id="barre-etat" style="margin-left:auto;font-weight:500"></span></header>
 <main>
   <div id="retour"></div>
   <div class="entete-detail" id="entete"></div>
@@ -30,13 +26,14 @@
   <div id="execution"></div>
 </main>
 <script src="/statique/commun.js"></script>
+<script>document.body.insertAdjacentHTML("beforeend", dockHTML(""));</script>
 <script>
 const NOM = decodeURIComponent(location.pathname.split("/").filter(Boolean)[1] || "");
 let P = null, rapportOuvert = null;
 
 async function charger() {
   P = await api(`/api/pipelines/${NOM}`);
-  document.title = `agentforge — ${P.nom}`;
+  document.title = `agentforge — ${P.nom}`; document.getElementById("titre-page").textContent = P.nom.replace(/-/g, " ");
   document.getElementById("barre-etat").textContent = P.en_cours ? "exécution en cours…" : "";
   const ex = P.execution || {};
   document.getElementById("entete").replaceChildren(

@@ -7,21 +7,18 @@
 <link rel="stylesheet" href="/statique/style.css">
 </head>
 <body>
-<header>
-  <h1>agentforge</h1>
-  <nav><a href="/">Accueil</a><a href="/assembleur">Assembleur</a><a href="/creer">Créer</a></nav>
-  <div class="droite" id="titre"></div>
-</header>
+<header class="barre-titre"><a href="/" class="retour">‹ Accueil</a><h1 id="titre-page"></h1></header>
 <main>
   <div id="retour"></div>
   <div class="cadres" id="cadres"></div>
 </main>
 <script src="/statique/commun.js"></script>
+<script>document.body.insertAdjacentHTML("beforeend", dockHTML(""));</script>
 <script>
 async function demarrer() {
   const nom = decodeURIComponent(location.pathname.split("/").filter(Boolean)[1] || "");
   const vue = await api(`/api/vues/${nom}`);
-  document.getElementById("titre").textContent = `vue « ${vue.nom} »`;
+  document.getElementById("titre-page").textContent = vue.nom;
   const cadres = document.getElementById("cadres");
   for (const c of vue.cadres) {
     let url = null, titre = c.brique;

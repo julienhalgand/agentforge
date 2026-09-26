@@ -7,19 +7,23 @@
 <link rel="stylesheet" href="/statique/style.css">
 </head>
 <body>
-<header>
-  <h1>agentforge</h1>
-  <nav><a href="/" class="actif">Accueil</a><a href="/assembleur">Assembleur</a><a href="/creer">Créer</a></nav>
-  <div class="droite" id="barre-etat">…</div>
-</header>
-<main class="ecran">
+<div class="barre-statut"><span id="heure"></span><span>agentforge</span></div>
+<main class="ecran-iphone">
   <div id="problemes"></div>
-  <div class="statut" id="barre-etat"></div>
-  <h2>Pipelines</h2>
-  <div class="grille-apps" id="pipelines"></div>
-  <h2>Briques</h2>
-  <div class="grille-apps" id="briques"></div>
-  <div id="bloc-vues"></div>
+  <div class="widgets">
+    <a class="widget widget-modele" href="/brique/modele-local" id="widget-modele">
+      <div class="widget-titre">Modèle local</div>
+      <div class="widget-grand" id="widget-modele-etat">…</div>
+      <div class="widget-sous" id="widget-modele-detail"></div>
+    </a>
+    <a class="widget widget-rapport" href="#" id="widget-rapport">
+      <div class="widget-titre">Dernier rapport</div>
+      <div class="widget-grand" id="widget-rapport-titre">—</div>
+      <div class="widget-sous" id="widget-rapport-detail"></div>
+    </a>
+  </div>
+  <div class="grille-icones" id="icones"></div>
+  <div class="points"><span class="actif"></span><span></span></div>
   <details class="dev"><summary>Pour les développeurs</summary>
     <h2>Journal de l'exécution en cours</h2>
     <div class="journal" id="journal">—</div>
@@ -27,6 +31,8 @@
     <div id="contrats" class="tuiles"></div>
   </details>
 </main>
+<script src="/statique/commun.js"></script>
+<script>document.body.insertAdjacentHTML("beforeend", dockHTML("accueil"));</script>
 
 <dialog id="dialogue-planification">
   <form method="dialog" id="formulaire-planification">
@@ -63,7 +69,6 @@
   </form>
 </dialog>
 
-<script src="/statique/commun.js"></script>
 <script>
 let ETAT = null;
 let cibleEnEdition = null;
@@ -80,14 +85,29 @@ async function rafraichir() {
 
 function rendre() {
   document.getElementById("problemes").replaceChildren(...ETAT.problemes.map(p => el("div", { class: "probleme" }, p)));
-  document.getElementById("barre-etat").textContent = ETAT.en_cours ? `⏳ ${ETAT.en_cours.split(":")[1]} en cours…` : "";
-  document.getElementById("pipelines").replaceChildren(
-    ...ETAT.pipelines.map(p => appIcone(p.icone, p.nom, `/pipeline/${p.nom}`, p.execution, p.planification, "pipeline")),
-    appIcone("＋", "Créer", "/creer", null, null, "plus"));
-  document.getElementById("briques").replaceChildren(...ETAT.briques.map(b => appIcone(b.icone, b.nom, `/brique/${b.nom}`, b.execution, b.planification, b.type)));
-  const vues = document.getElementById("bloc-vues");
-  vues.replaceChildren(el("h2", {}, "Vues ", el("button", { class: "discret", onclick: dialogueVue }, "＋")),
-    el("div", { class: "grille-apps" }, ...ETAT.vues.map(v => appIcone("🗂", v.nom, `/vue/${v.nom}`, null, null, "vue"))));
+  document.getElementById("heure").textContent = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  const icones = [
+    ...ETAT.pipelines.map(p => appIcone(p.icone, p.nom, `/pipeline/${p.nom}`, p.execution, "pipeline")),
+    ...ETAT.briques.filter(b => b.nom !== "modele-local").map(b => appIcone(b.icone, b.nom, `/brique/${b.nom}`, b.execution, b.type)),
+    ...ETAT.vues.map(v => appIcone("🗂", v.nom, `/vue/${v.nom}`, null, "vue")),
+    appIcone("＋", "Nouveau", "/creer", null, "plus"),
+  ];
+  document.getElementById("icones").replaceChildren(...icones);
+  // widgets
+  const modele = ETAT.briques.find(b => b.nom === "modele-local");
+  const ex = modele && modele.execution || {};
+  document.getElementById("widget-modele-etat").textContent = ETAT.en_cours ? "au travail" : "prêt";
+  document.getElementById("widget-modele-detail").textContent = ETAT.en_cours ? ETAT.en_cours.split(":")[1] : (modele ? "touche pour choisir un modèle" : "");
+  const avecRapport = ETAT.briques.find(b => b.rapports && b.rapports.length);
+  if (avecRapport) {
+    const r = avecRapport.rapports[0];
+    document.getElementById("widget-rapport").href = `/brique/${avecRapport.nom}`;
+    const d = new Date(r.date + "T12:00:00"); document.getElementById("widget-rapport-titre").textContent = isNaN(d) ? r.date : d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+    document.getElementById("widget-rapport-detail").textContent = titreLisible(avecRapport.nom);
+  } else {
+    document.getElementById("widget-rapport-titre").textContent = "aucun";
+    document.getElementById("widget-rapport-detail").textContent = "lance un pipeline";
+  }
   document.getElementById("journal").textContent = ETAT.journal.length ? ETAT.journal.join("\n") : "—";
   document.getElementById("contrats").replaceChildren(...ETAT.contrats.map(c => el("div", { class: "tuile" },
     el("div", { class: "tete" }, el("span", { class: "icone" }, "📄"), el("div", {}, el("div", { class: "nom" }, c.titre), el("div", { class: "contrat" }, c.reference))),
@@ -96,11 +116,10 @@ function rendre() {
 
 function titreLisible(nom) { const t = nom.replace(/[-_]/g, " ").replace(/\b(btc)\b/gi, "BTC"); return t.charAt(0).toUpperCase() + t.slice(1); }
 
-// Une icône d'application : grand carré arrondi, nom dessous, pastille d'état dans le coin.
-function appIcone(icone, nom, url, execution, planification, genre) {
+// Une icône : carré arrondi avec dégradé, nom dessous, pastille d'état.
+function appIcone(icone, nom, url, execution, genre) {
   const etat = (execution || {}).etat;
-  const titre = execution ? `${texteEtat(execution)} · ${dateCourte(execution.debut_ms)} · ${textePlanification(planification)}` : "";
-  return el("a", { class: `app ${genre}`, href: url, title: titre },
+  return el("a", { class: `app ${genre}`, href: url, title: execution ? `${texteEtat(execution)} · ${dateCourte(execution.debut_ms)}` : "" },
     el("span", { class: "app-icone" }, icone, etat && etat !== "jamais_execute" ? el("span", { class: `pastille ${etat}` }) : null),
     el("span", { class: "app-nom" }, titreLisible(nom)));
 }
