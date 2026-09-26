@@ -387,11 +387,15 @@ VERROU_DEMANDE = threading.Lock()
 DEMARRE_A = time.strftime("%H:%M:%S")
 
 
-def _generer_json_modele(consigne: str, schema: dict, systeme: str):
+def _generer_json_modele(consigne: str, schema: dict, systeme: str, role: str = "texte"):
     """Le modèle local, vu comme une fonction : passe par la brique modele-local (qui se prépare seule si besoin)."""
     m = registre.trouver_brique("modele-local")
     with ClientMCP(m.commande_serveur(), m.dossier, delai_s=1800) as client:
-        return client.appeler("generer_json", {"consigne": consigne, "schema": schema, "systeme": systeme})["valeur"]
+        return client.appeler("generer_json", {"consigne": consigne, "schema": schema, "systeme": systeme, "role": role})["valeur"]
+
+
+def _generer_json_code(consigne: str, schema: dict, systeme: str):
+    return _generer_json_modele(consigne, schema, systeme, role="code")
 
 
 def _demander_en_tache(identifiant: str, phrase: str, genre: str = "auto") -> None:
@@ -428,7 +432,7 @@ def _demander_en_tache(identifiant: str, phrase: str, genre: str = "auto") -> No
                     raise
                 journal("les briques existantes ne suffisent pas (" + exc.cause + ") : on crée une brique")
         journal("étape 2/3 — création d'une nouvelle brique (le modèle écrit, agentforge vérifie" + (" et essaie" if genre != "page" else "") + " ; ça recommence jusqu'à réussir)")
-        resultat = mod_creation.creer_brique(phrase, _generer_json_modele, journal=lambda m: journal("  " + m), annulee=tache.annulee, genre=genre if genre in ("page", "service") else "auto")
+        resultat = mod_creation.creer_brique(phrase, _generer_json_code, journal=lambda m: journal("  " + m), annulee=tache.annulee, genre=genre if genre in ("page", "service") else "auto")
         journal(f"étape 3/3 — brique « {resultat['nom']} » installée")
         ecrire_json(DOSSIER_CREATIONS / f"{identifiant}.resultat.json", {"action": "creer", **resultat, "journal": etapes}, sauvegarder=False)
         tache.terminer(resultat["dossier"], etape=f"brique « {resultat['nom']} » créée et testée")

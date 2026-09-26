@@ -45,7 +45,7 @@ def configuration() -> dict:
 
 def enregistrer_configuration(**champs) -> dict:
     c = {**configuration(), **champs}
-    ecrire_json(FICHIER_CONFIG, {k: c[k] for k in ("backend", "nom", "url", "gpu") if k in c})
+    ecrire_json(FICHIER_CONFIG, {k: c[k] for k in ("backend", "nom", "nom_code", "url", "gpu") if k in c})
     return c
 
 
@@ -78,7 +78,7 @@ serveur = ServeurMCP("modele-local", "0.1.0")
 def etat(_entree: dict) -> dict:
     c = configuration()
     backend = c.get("backend", "integre")
-    base = {"backend": backend, "modele_actif": c.get("nom", ""), "gpu": bool(c.get("gpu", True)), "plateforme": "/".join(mod_moteur.plateforme()), "catalogue": [{"nom": k, **v} for k, v in mod_moteur.CATALOGUE.items()]}
+    base = {"backend": backend, "modele_actif": c.get("nom", ""), "modele_code": c.get("nom_code", ""), "gpu": bool(c.get("gpu", True)), "plateforme": "/".join(mod_moteur.plateforme()), "catalogue": [{"nom": k, **v} for k, v in mod_moteur.CATALOGUE.items()]}
     if backend == "integre":
         moteur = mod_moteur.moteur_installe()
         modeles = mod_moteur.modeles_installes()
@@ -149,7 +149,7 @@ def installer_modele(entree: dict) -> dict:
         if configuration().get("backend", "integre") == "integre":
             fichier = mod_moteur.telecharger_modele(nom, progres=tache.progres, annulee=tache.annulee, url=entree.get("url"))
             if entree.get("activer", True):
-                enregistrer_configuration(nom=nom)
+                enregistrer_configuration(**({"nom_code": nom} if entree.get("role") == "code" else {"nom": nom}))
                 if mod_moteur.serveur_en_marche():
                     mod_moteur.arreter_serveur()  # la prochaine génération repartira avec ce modèle
             return tache.terminer(str(fichier), etape=f"{nom} téléchargé et actif")
@@ -164,8 +164,11 @@ def installer_modele(entree: dict) -> dict:
         return tache.echouer(exc.texte())
 
 
-@serveur.service("choisir_modele", "Rend un modèle actif (et le choix CPU/GPU).", entree={"type": "object", "required": ["nom"]}, sortie={"type": "object"})
+@serveur.service("choisir_modele", "Rend un modèle actif (rôle « texte » par défaut, ou « code » pour créer des applications) et fixe CPU/GPU.", entree={"type": "object", "required": ["nom"]}, sortie={"type": "object"})
 def choisir_modele(entree: dict) -> dict:
+    if entree.get("role") == "code":
+        c = enregistrer_configuration(nom_code=entree["nom"])
+        return {"modele_actif": c.get("nom", ""), "modele_code": c["nom_code"], "gpu": bool(c.get("gpu", True))}
     c = enregistrer_configuration(nom=entree["nom"], gpu=bool(entree.get("gpu", configuration().get("gpu", True))))
     if c.get("backend", "integre") == "integre" and mod_moteur.serveur_en_marche():
         mod_moteur.arreter_serveur()  # le prochain appel relancera le moteur avec ce modèle
@@ -212,7 +215,10 @@ def generer(entree: dict) -> dict:
 
 @serveur.service("generer_json", "Sortie JSON contrainte par un schéma.", entree={"type": "object", "required": ["consigne", "schema"]}, sortie={"type": "object", "required": ["valeur", "modele"]})
 def generer_json(entree: dict) -> dict:
-    m = modele_pret(entree.get("modele"))
+    nom = entree.get("modele")
+    if not nom and entree.get("role") == "code":
+        nom = configuration().get("nom_code") or None
+    m = modele_pret(nom)
     valeur = m.generer_json(_prompt(entree), entree["schema"], systeme=entree.get("systeme", SYSTEME_PAR_DEFAUT))
     return {"valeur": valeur, "modele": m.nom, "backend": m.backend}
 

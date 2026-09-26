@@ -112,7 +112,10 @@
               "qwen2.5-3b",
               "qwen2.5-7b",
               "llama-3.2-3b",
-              "mistral-7b"
+              "mistral-7b",
+              "qwen2.5-coder-1.5b",
+              "qwen2.5-coder-3b",
+              "qwen2.5-coder-7b"
             ]
           },
           "url": {
@@ -122,6 +125,13 @@
           "activer": {
             "type": "boolean",
             "description": "Le rendre actif une fois téléchargé (défaut : oui)"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "texte",
+              "code"
+            ]
           }
         }
       },
@@ -144,6 +154,14 @@
           },
           "gpu": {
             "type": "boolean"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "texte",
+              "code"
+            ],
+            "description": "texte (défaut) ou code : modèle utilisé pour créer des applications"
           }
         }
       },
@@ -321,6 +339,14 @@
           },
           "modele": {
             "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "texte",
+              "code"
+            ],
+            "description": "code : utiliser le modèle spécialisé code s'il est choisi"
           }
         }
       },

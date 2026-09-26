@@ -46,6 +46,9 @@ CATALOGUE = {
     "qwen2.5-7b": {"titre": "Qwen 2.5 7B — meilleur, GPU 6 Go ou CPU lent", "taille_go": 4.7, "url": "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf"},
     "llama-3.2-3b": {"titre": "Llama 3.2 3B — léger, généraliste", "taille_go": 2.0, "url": "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf"},
     "mistral-7b": {"titre": "Mistral 7B — bon en français, GPU 6 Go ou CPU lent", "taille_go": 4.4, "url": "https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf"},
+    "qwen2.5-coder-1.5b": {"titre": "Qwen 2.5 Coder 1.5B — spécialisé code, très léger", "taille_go": 1.1, "code": True, "url": "https://huggingface.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-1.5B-Instruct-Q4_K_M.gguf"},
+    "qwen2.5-coder-3b": {"titre": "Qwen 2.5 Coder 3B — spécialisé code, léger", "taille_go": 2.0, "code": True, "url": "https://huggingface.co/bartowski/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf"},
+    "qwen2.5-coder-7b": {"titre": "Qwen 2.5 Coder 7B — spécialisé code (recommandé pour créer des applications), GPU 6 Go ou CPU lent", "taille_go": 4.7, "code": True, "url": "https://huggingface.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf"},
 }
 
 

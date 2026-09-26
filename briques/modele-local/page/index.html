@@ -34,7 +34,7 @@
 
 <div class="carte">
   <h3>Choisir le modèle</h3>
-  <p class="sourd" style="margin:0 0 8px">Le plus petit est installé tout seul pour que ça marche direct. Un clic sur un autre le télécharge et le rend actif.</p>
+  <p class="sourd" style="margin:0 0 8px">Deux rôles : <strong>Texte</strong> (rapports, commentaires) et <strong>Code</strong> (créer des applications — un modèle spécialisé code fait la différence). Un clic télécharge et attribue.</p>
   <div id="liste-modeles" class="liste-groupee"></div>
   <small id="progres-modele"></small>
   <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="gpu" style="width:auto" onchange="choisirGPU()"> utiliser la carte graphique (GPU) — repli automatique sur le processeur si elle ne marche pas</label>
@@ -91,23 +91,25 @@ async function relancerCPU() { preparationLancee = true; await appeler("choisir_
 function rendreListeModeles() {
   const conteneur = document.getElementById("liste-modeles");
   conteneur.replaceChildren(...(ETAT.catalogue || []).map(c => {
-    const telecharge = ETAT.modeles.includes(c.nom), actif = c.nom === ETAT.modele_actif;
+    const telecharge = ETAT.modeles.includes(c.nom), actifTexte = c.nom === ETAT.modele_actif, actifCode = c.nom === ETAT.modele_code;
     const ligne = document.createElement("div"); ligne.className = "rangee";
-    const texte = document.createElement("div"); texte.style.flex = "1"; texte.innerHTML = `<strong>${c.titre}</strong><br><small>≈ ${c.taille_go} Go${telecharge ? " · téléchargé" : ""}</small>`;
-    const bouton = document.createElement("button");
-    if (actif) { bouton.textContent = "✓ actif"; bouton.disabled = true; bouton.className = "principal"; }
-    else if (telecharge) { bouton.textContent = "Utiliser"; bouton.onclick = () => utiliser(c.nom); }
-    else { bouton.textContent = "⬇ Télécharger et utiliser"; bouton.onclick = () => installerModele(c.nom); }
-    ligne.append(texte, bouton); return ligne;
+    const texte = document.createElement("div"); texte.style.flex = "1"; texte.innerHTML = `<strong>${c.titre}</strong><br><small>≈ ${c.taille_go} Go${telecharge ? " · téléchargé" : ""}${c.code ? " · spécialisé code" : ""}</small>`;
+    const bTexte = document.createElement("button"), bCode = document.createElement("button");
+    bTexte.textContent = actifTexte ? "✓ Texte" : "Texte"; bTexte.disabled = actifTexte; if (actifTexte) bTexte.className = "principal";
+    bCode.textContent = actifCode ? "✓ Code" : "Code"; bCode.disabled = actifCode; if (actifCode) bCode.className = "principal";
+    bTexte.onclick = () => telecharge ? utiliser(c.nom, "texte") : installerModele(c.nom, "texte");
+    bCode.onclick = () => telecharge ? utiliser(c.nom, "code") : installerModele(c.nom, "code");
+    if (!telecharge) { bTexte.title = "télécharge puis attribue au rôle Texte"; bCode.title = "télécharge puis attribue au rôle Code"; bTexte.textContent = "⬇ Texte"; bCode.textContent = "⬇ Code"; }
+    ligne.append(texte, bTexte, bCode); return ligne;
   }));
 }
-async function utiliser(nom) {
-  const r = await appeler("choisir_modele", { nom, gpu: document.getElementById("gpu").checked });
+async function utiliser(nom, role) {
+  const r = await appeler("choisir_modele", { nom, role: role || "texte", gpu: document.getElementById("gpu").checked });
   if (r.erreur) alert(texteErreur(r.erreur)); rafraichirEtat();
 }
 async function choisirGPU() { if (ETAT && ETAT.modele_actif) utiliser(ETAT.modele_actif); }
-async function installerModele(nom) {
-  const r = await api(`/api/lancer-tache/${BRIQUE}/installer_modele`, { nom });
+async function installerModele(nom, role) {
+  const r = await api(`/api/lancer-tache/${BRIQUE}/installer_modele`, { nom, role: role || "texte" });
   if (r.erreur) { document.getElementById("progres-modele").textContent = texteErreur(r.erreur); return; }
   tacheModele = nom.replace(/[:/]/g, "_");
 }
