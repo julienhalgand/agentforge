@@ -40,8 +40,23 @@ def ecrire_atomique(chemin: Path | str, contenu: str | bytes, sauvegarder: bool 
         f.write(contenu)
         f.flush()
         os.fsync(f.fileno())
-    os.replace(temporaire, chemin)
-    return chemin
+    # Windows refuse le remplacement (WinError 5 / 32) si un lecteur a le fichier ouvert à cet instant :
+    # on réessaie brièvement, puis en dernier recours on écrit en place (jamais d'échec pour un simple état).
+    derniere = None
+    for tentative in range(20):
+        try:
+            os.replace(temporaire, chemin)
+            return chemin
+        except PermissionError as exc:
+            derniere = exc
+            time.sleep(0.02 * (tentative + 1))
+    try:
+        with open(chemin, mode, encoding=encodage) as f:
+            f.write(contenu)
+        os.unlink(temporaire)
+        return chemin
+    except OSError:
+        raise derniere  # type: ignore[misc]
 
 
 def ecrire_json(chemin: Path | str, donnees: Any, sauvegarder: bool = True) -> Path:

@@ -101,7 +101,12 @@ class Tache:
 
     # --- interne ------------------------------------------------------------
     def _lire(self) -> dict:
-        if self.fichier_progres.exists():
+        for tentative in range(5):  # une lecture peut tomber pendant un remplacement du fichier : on réessaie
+            if not self.fichier_progres.exists():
+                if tentative < 4:
+                    time.sleep(0.03)
+                    continue
+                break
             try:
                 etat = lire_json(self.fichier_progres)
                 if etat.get("erreur") and self.fichier_erreur.exists():
@@ -120,7 +125,7 @@ class Tache:
                         pass
                 return etat
             except (OSError, json.JSONDecodeError):
-                pass
+                time.sleep(0.03)
         return {"tache": self.nom, "etat": "en_attente", "pourcentage": 0.0, "mis_a_jour_ms": 0}
 
     def _ecrire(self, etat: str, pourcentage: float, etape: str, eta_s=None, resultat=None, erreur=None, force=False) -> None:

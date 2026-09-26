@@ -160,3 +160,24 @@ def test_llm_erreurs_parlantes(faux_ollama):
     assert "local d'abord" in exc.value.remede
     injoignable = llm.ModeleLocal({"backend": "ollama", "nom": "x", "url": "http://127.0.0.1:9"})
     assert "injoignable" in injoignable.disponible()[1]
+
+
+def test_ecriture_atomique_reessaie_quand_windows_refuse_le_remplacement(tmp_path, monkeypatch):
+    """WinError 5 pendant os.replace : on réessaie, et le contenu final est le bon."""
+    import os as _os
+    from forge.utils import fichiers
+
+    refus = {"restants": 3}
+    vrai_replace = _os.replace
+
+    def replace_capricieux(src, dst):
+        if refus["restants"] > 0:
+            refus["restants"] -= 1
+            raise PermissionError(5, "Accès refusé", str(src))
+        return vrai_replace(src, dst)
+
+    monkeypatch.setattr(fichiers.os, "replace", replace_capricieux)
+    f = tmp_path / "etat.json"
+    fichiers.ecrire_json(f, {"etat": "en_cours"}, sauvegarder=False)
+    assert json.loads(f.read_text(encoding="utf-8")) == {"etat": "en_cours"} and refus["restants"] == 0
+    assert not list(tmp_path.glob(".etat.json.tmp-*"))
