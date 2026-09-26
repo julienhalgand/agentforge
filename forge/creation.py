@@ -292,7 +292,8 @@ def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: in
             echecs = _essai(m, journal)
             if echecs:
                 dernier_probleme = "\n".join(echecs)
-                journal("échec à l'essai : " + echecs[0][:160])
+                for e in echecs[:3]:
+                    journal("échec à l'essai : " + e[:220])
                 continue
             if not installer:
                 return {"nom": m.nom, "dossier": str(temporaire), "tours": tour, "spec": spec}
@@ -306,6 +307,8 @@ def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: in
         except ErreurForge as exc:
             dernier_probleme = exc.texte()
             journal(f"refusée : {exc.cause}")
+            for d in exc.details[:4]:
+                journal("  → " + d[:220])
         finally:
             if temporaire.exists() and (not installer or not (registre.DOSSIER_UTILISATEUR / "briques" / (spec or {}).get("nom", "")).exists()):
                 shutil.rmtree(temporaire, ignore_errors=True)
