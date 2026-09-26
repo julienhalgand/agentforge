@@ -25,11 +25,13 @@
 
   <div id="bloc-page"></div>
 
-  <h2>Services</h2>
-  <div id="services"></div>
-
-  <h2>Dernière exécution</h2>
-  <div id="execution"></div>
+  <details style="margin-top:28px"><summary>Plus : appeler un service, dernière exécution, supprimer</summary>
+    <h2>Services</h2>
+    <div id="services"></div>
+    <h2>Dernière exécution</h2>
+    <div id="execution"></div>
+    <div class="actions" style="margin-top:16px" id="actions-avancees"></div>
+  </details>
 </main>
 
 <dialog id="dialogue-planification">
@@ -73,9 +75,11 @@ async function charger() {
   if (B.executable) actions.push(el("button", { class: "principal", onclick: executer }, "▶ Exécuter"));
   else actions.push(el("span", { class: "type" }, "🔗 s'exécute via un pipeline (son service attend une donnée produite par une autre brique) "));
   actions.push(el("button", { onclick: dialoguePlanification }, "🕒 Planifier"));
-  actions.push(el("button", { onclick: ouvrirEditeur }, "📝 Ouvrir dans l'éditeur"));
-  if (B.page) actions.push(el("a", { class: "bouton", href: B.page, target: "_blank" }, "🖥 Page dans un onglet"));
   document.getElementById("actions-brique").replaceChildren(el("p", { class: "type", style: "width:100%;margin:0 0 6px" }, B.description), ...actions);
+  const avancees = [el("button", { onclick: ouvrirEditeur }, "📝 Ouvrir dans l'éditeur")];
+  if (B.page) avancees.push(el("a", { class: "bouton", href: B.page, target: "_blank" }, "🖥 Page dans un onglet"));
+  if (!B.livree) avancees.push(el("button", { onclick: supprimer }, "🗑 Supprimer (corbeille)"));
+  document.getElementById("actions-avancees").replaceChildren(...avancees);
 
   // rapports
   const liste = document.getElementById("liste-rapports");
@@ -164,6 +168,10 @@ function nettoyer(o) { return Object.fromEntries(Object.entries(o).filter(([, v]
 async function executer() {
   try { const r = await api(`/api/executer/${B.cible}`, { method: "POST" }); if (!r.mise_en_file) alert(r.message); } catch (e) { alert(texteErreur(e)); }
   setTimeout(charger, 1500);
+}
+async function supprimer() {
+  if (!confirm(`Déplacer ${B.nom} vers la corbeille ? Rien n'est effacé.`)) return;
+  try { await api(`/api/supprimer/${B.nom}`, { method: "POST" }); location.href = "/"; } catch (e) { alert(texteErreur(e)); }
 }
 async function ouvrirEditeur() { try { await api(`/api/ouvrir-editeur/${B.nom}`, { method: "POST" }); } catch (e) { alert(texteErreur(e)); } }
 function dialoguePlanification() {

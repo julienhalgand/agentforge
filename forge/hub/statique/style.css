@@ -129,3 +129,27 @@ small { color: var(--sourd); font-size: 13px; }
 .grande-etat .pastille { width: 12px; height: 12px; }
 
 @media (max-width: 720px) { .tuiles { grid-template-columns: 1fr; } header h1 { font-size: 26px; } .colonnes { grid-template-columns: 1fr; } .cadres { grid-template-columns: 1fr; } main { padding: 8px 14px 60px; } }
+
+/* écran d'accueil : grille d'icônes, comme un téléphone */
+main.ecran { max-width: 980px; }
+main.ecran h2 { margin: 22px 6px 12px; }
+.statut { color: var(--sourd); font-size: 14px; min-height: 20px; margin: 0 6px; }
+.grille-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 22px 10px; }
+.app { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--texte); text-decoration: none; transition: transform .12s ease; }
+.app:hover { transform: translateY(-2px); }
+.app:active { transform: scale(.96); }
+.app-icone { position: relative; width: 76px; height: 76px; border-radius: 20px; display: grid; place-items: center; font-size: 36px; line-height: 1;
+  background: linear-gradient(150deg, #ffffff, #e9eef7); box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 8px 20px rgba(0,0,0,.08); }
+.app.pipeline .app-icone { background: linear-gradient(150deg, #dbeeff, #b9dbff); }
+.app.agent .app-icone { background: linear-gradient(150deg, #fff0d6, #ffd9a3); }
+.app.vue .app-icone { background: linear-gradient(150deg, #e9e3ff, #cfc3ff); }
+.app.plus .app-icone { background: var(--accent); color: #fff; font-size: 40px; font-weight: 300; }
+.app-icone .pastille { position: absolute; right: -3px; top: -3px; width: 14px; height: 14px; border: 2.5px solid var(--fond); }
+.app-nom { font-size: 13px; font-weight: 500; text-align: center; max-width: 112px; line-height: 1.25; overflow-wrap: anywhere; }
+details.dev { margin-top: 40px; } details.dev > summary { font-size: 13px; }
+@media (prefers-color-scheme: dark) {
+  .app-icone { background: linear-gradient(150deg, #3a3a3c, #2c2c2e); }
+  .app.pipeline .app-icone { background: linear-gradient(150deg, #1f4e83, #143a63); }
+  .app.agent .app-icone { background: linear-gradient(150deg, #6b4a12, #4a330c); }
+  .app.vue .app-icone { background: linear-gradient(150deg, #4a3d8a, #35296b); }
+}

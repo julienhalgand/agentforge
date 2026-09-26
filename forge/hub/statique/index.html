@@ -12,16 +12,15 @@
   <nav><a href="/" class="actif">Accueil</a><a href="/assembleur">Assembleur</a><a href="/creer">Créer</a></nav>
   <div class="droite" id="barre-etat">…</div>
 </header>
-<main>
+<main class="ecran">
   <div id="problemes"></div>
+  <div class="statut" id="barre-etat"></div>
   <h2>Pipelines</h2>
-  <div class="tuiles" id="pipelines"></div>
+  <div class="grille-apps" id="pipelines"></div>
   <h2>Briques</h2>
-  <div class="tuiles" id="briques"></div>
-  <h2>Vues composées <button class="discret" onclick="dialogueVue()">＋ nouvelle vue</button></h2>
-  <div class="tuiles" id="vues"></div>
-  <details style="margin-top:28px">
-    <summary>Pour les développeurs : journal et contrats de données</summary>
+  <div class="grille-apps" id="briques"></div>
+  <div id="bloc-vues"></div>
+  <details class="dev"><summary>Pour les développeurs</summary>
     <h2>Journal de l'exécution en cours</h2>
     <div class="journal" id="journal">—</div>
     <h2>Contrats de données</h2>
@@ -80,83 +79,30 @@ async function rafraichir() {
 }
 
 function rendre() {
-  const pb = document.getElementById("problemes");
-  pb.replaceChildren(...ETAT.problemes.map(p => el("div", { class: "probleme" }, p)));
-  document.getElementById("barre-etat").textContent =
-    (ETAT.en_cours ? `⏳ ${ETAT.en_cours.split(":")[1]} en cours` : "") + (ETAT.en_file.length ? ` · ${ETAT.en_file.length} en attente` : "");
-  document.getElementById("pipelines").replaceChildren(...ETAT.pipelines.map(tuilePipeline), tuileNouveauPipeline());
-  document.getElementById("briques").replaceChildren(...ETAT.briques.map(tuileBrique));
-  document.getElementById("vues").replaceChildren(...ETAT.vues.map(v => el("div", { class: "tuile" },
-    el("div", { class: "tete" }, el("span", { class: "icone" }, "🗂"), el("div", {}, el("div", { class: "nom" }, v.nom), el("div", { class: "type" }, `${v.cadres.length} cadre(s)`))),
-    el("div", { class: "actions" }, el("a", { class: "bouton", href: `/vue/${v.nom}` }, "Ouvrir")))));
+  document.getElementById("problemes").replaceChildren(...ETAT.problemes.map(p => el("div", { class: "probleme" }, p)));
+  document.getElementById("barre-etat").textContent = ETAT.en_cours ? `⏳ ${ETAT.en_cours.split(":")[1]} en cours…` : "";
+  document.getElementById("pipelines").replaceChildren(
+    ...ETAT.pipelines.map(p => appIcone(p.icone, p.nom, `/pipeline/${p.nom}`, p.execution, p.planification, "pipeline")),
+    appIcone("＋", "Créer", "/creer", null, null, "plus"));
+  document.getElementById("briques").replaceChildren(...ETAT.briques.map(b => appIcone(b.icone, b.nom, `/brique/${b.nom}`, b.execution, b.planification, b.type)));
+  const vues = document.getElementById("bloc-vues");
+  vues.replaceChildren(el("h2", {}, "Vues ", el("button", { class: "discret", onclick: dialogueVue }, "＋")),
+    el("div", { class: "grille-apps" }, ...ETAT.vues.map(v => appIcone("🗂", v.nom, `/vue/${v.nom}`, null, null, "vue"))));
   document.getElementById("journal").textContent = ETAT.journal.length ? ETAT.journal.join("\n") : "—";
   document.getElementById("contrats").replaceChildren(...ETAT.contrats.map(c => el("div", { class: "tuile" },
     el("div", { class: "tete" }, el("span", { class: "icone" }, "📄"), el("div", {}, el("div", { class: "nom" }, c.titre), el("div", { class: "contrat" }, c.reference))),
     el("div", { class: "desc" }, c.description))));
 }
 
-function pastille(execution) {
-  return el("span", { class: `pastille ${execution.etat || ""}` });
-}
+function titreLisible(nom) { const t = nom.replace(/[-_]/g, " ").replace(/\b(btc)\b/gi, "BTC"); return t.charAt(0).toUpperCase() + t.slice(1); }
 
-function ligneEtat(x) {
-  const ex = x.execution || {};
-  const enfants = [pastille(ex), `${texteEtat(ex)} · ${dateCourte(ex.debut_ms)}`, el("span", { class: "type" }, ` · ${textePlanification(x.planification)}`)];
-  if (ex.manques && ex.manques.length) enfants.push(el("span", { class: "type" }, ` · ${ex.manques.length} manque(s)`));
-  return el("div", { class: "etat" }, ...enfants);
-}
-
-function menu(...boutons) {
-  const m = el("div", { class: "menu" });
-  const b = el("button", { class: "discret", onclick: (e) => { e.stopPropagation(); m.classList.toggle("ouvert"); } }, "⋯");
-  m.append(b, el("div", { class: "liste" }, ...boutons));
-  document.addEventListener("click", () => m.classList.remove("ouvert"));
-  return m;
-}
-
-function ouvrir(url) { return (e) => { if (e.target.closest("button, a, .menu")) return; location.href = url; }; }
-
-function tuilePipeline(p) {
-  return el("div", { class: "tuile cliquable", onclick: ouvrir(`/pipeline/${p.nom}`) },
-    el("div", { class: "tete" }, el("span", { class: "icone" }, p.icone), el("div", {}, el("div", { class: "nom" }, p.nom), el("div", { class: "type" }, `pipeline · ${p.etapes.length} étape(s)`)),
-      menu(
-        el("button", { onclick: () => dialoguePlanification(p.cible, p.planification) }, "🕒 Planifier"),
-        el("button", { onclick: () => detail(p.cible) }, "🔍 Dernière exécution"),
-        el("button", { onclick: () => { location.href = `/assembleur?pipeline=${encodeURIComponent(p.nom)}`; } }, "✏️ Modifier dans l'assembleur"),
-      )),
-    el("div", { class: "desc" }, p.description),
-    ligneEtat(p),
-    el("div", { class: "actions" },
-      el("button", { class: "principal", onclick: () => executer(p.cible) }, "▶ Exécuter"),
-      el("a", { class: "bouton", href: `/pipeline/${p.nom}` }, "Ouvrir ›"),
-      ...(p.execution && p.execution.erreur ? [el("button", { onclick: () => detail(p.cible) }, "⚠ voir l'erreur")] : []),
-    ));
-}
-
-function tuileNouveauPipeline() {
-  return el("div", { class: "tuile", style: "align-items:center;justify-content:center;box-shadow:none;background:transparent;border:2px dashed var(--bord)" },
-    el("a", { class: "bouton principal", href: "/creer" }, "＋ Créer avec une phrase"), el("a", { class: "bouton", href: "/assembleur" }, "Assembler à la main"));
-}
-
-function tuileBrique(b) {
-  const dernier = b.rapports[0];
-  const actions = b.executable
-    ? [el("button", { class: "principal", onclick: () => executer(b.cible) }, "▶ Exécuter")]
-    : [el("span", { class: "type", title: "son service attend une donnée produite par une autre brique" }, "🔗 s'exécute via un pipeline")];
-  if (dernier) actions.push(el("a", { class: "bouton", href: dernier.url, target: "_blank" }, `📄 Rapport ${dernier.date}`));
-  if (b.page) actions.push(el("a", { class: "bouton", href: `/pages/${b.nom}/`, target: "_blank" }, "🖥 Ouvrir la page"));
-  const options = [
-    el("button", { onclick: () => dialoguePlanification(b.cible, b.planification) }, "🕒 Planifier"),
-    el("button", { onclick: () => detail(b.cible) }, "🔍 Dernière exécution"),
-    el("button", { onclick: () => ouvrirEditeur(b.nom) }, "📝 Ouvrir dans l'éditeur"),
-  ];
-  if (!b.livree) options.push(el("button", { onclick: () => supprimer(b.nom) }, "🗑 Supprimer (corbeille)"));
-  actions.push(el("a", { class: "bouton", href: `/brique/${b.nom}` }, "Ouvrir ›"));
-  return el("div", { class: "tuile cliquable", onclick: ouvrir(`/brique/${b.nom}`) },
-    el("div", { class: "tete" }, el("span", { class: "icone" }, b.icone), el("div", {}, el("div", { class: "nom" }, `${b.nom} ${b.version}`), el("div", { class: "type" }, `${b.type} · ${b.services.length > 3 ? b.services.length + " services" : b.services.map(s => s.nom).join(", ")}`)), menu(...options)),
-    el("div", { class: "desc" }, b.description),
-    ligneEtat(b),
-    el("div", { class: "actions" }, ...actions));
+// Une icône d'application : grand carré arrondi, nom dessous, pastille d'état dans le coin.
+function appIcone(icone, nom, url, execution, planification, genre) {
+  const etat = (execution || {}).etat;
+  const titre = execution ? `${texteEtat(execution)} · ${dateCourte(execution.debut_ms)} · ${textePlanification(planification)}` : "";
+  return el("a", { class: `app ${genre}`, href: url, title: titre },
+    el("span", { class: "app-icone" }, icone, etat && etat !== "jamais_execute" ? el("span", { class: `pastille ${etat}` }) : null),
+    el("span", { class: "app-nom" }, titreLisible(nom)));
 }
 
 async function executer(cible) {
