@@ -108,7 +108,8 @@ async function charger() {
   const blocPage = document.getElementById("bloc-page");
   blocPage.replaceChildren();
   if (B.page) {
-    blocPage.append(el("h2", {}, "Page interactive"), el("div", { class: "cadre-rapport" }, el("iframe", { src: B.page, title: "page" })));
+    blocPage.append(el("h2", {}, "Page interactive"), el("div", { class: "cadre-rapport" }, el("iframe", { src: B.page, title: "page" })), el("div", { id: "erreurs-page", style: "margin-top:8px" }));
+    rafraichirErreursPage();
   }
 
   // services : un formulaire par service
@@ -200,6 +201,12 @@ document.getElementById("formulaire-planification").addEventListener("submit", a
   charger();
 });
 
+async function rafraichirErreursPage() {
+  const bloc = document.getElementById("erreurs-page"); if (!bloc || !B.creee_depuis) return;
+  const liste = await api(`/api/pages-erreurs/${NOM}`).catch(() => []);
+  bloc.replaceChildren(liste.length ? el("div", { class: "probleme" }, "Vu dans la page (sera envoyé au modèle avec ta remarque) :\n" + liste.map(e => `  - ${e.quand} ${e.type} : ${e.message}` + (e.ligne ? ` (ligne ${e.ligne})` : "")).join("\n")) : null);
+}
+setInterval(rafraichirErreursPage, 3000);
 let ameliorationEnCours = null;
 async function ameliorer() {
   const remarque = document.getElementById("remarque").value.trim();

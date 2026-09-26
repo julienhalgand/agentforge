@@ -274,7 +274,17 @@ class Requete(BaseHTTPRequestHandler):
                     raise ErreurForge(f"{m.nom} n'a pas de page interactive", "déclarez « page » dans forge.json")
                 dossier_page = m.page.parent
                 reste = "/".join(parties[2:]) or m.page.name
+                cible = (dossier_page / reste).resolve()
+                if m.brut.get("creee_depuis") and cible == m.page.resolve() and cible.is_file():
+                    html = cible.read_text(encoding="utf-8", errors="replace")
+                    sonde = '<script src="/statique/sonde.js"></script>'
+                    html = html.replace("<head>", "<head>" + sonde, 1) if "<head>" in html else sonde + html
+                    corps = html.encode("utf-8")
+                    self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8"); self.send_header("Content-Length", str(len(corps))); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(corps)
+                    return
                 return self._fichier(dossier_page / reste, dossier_page)
+            if parties[:2] == ["api", "pages-erreurs"] and len(parties) == 3:
+                return self._json(_erreurs_page(parties[2]))
             self._json({"erreur": {"cause": f"route inconnue : {chemin}", "remede": "voir la liste des routes dans forge/hub/serveur.py"}}, 404)
         except ErreurForge as exc:
             self._erreur(exc, 404)
@@ -328,6 +338,14 @@ class Requete(BaseHTTPRequestHandler):
                     raise ErreurForge(f"genre inconnu : {genre}", "page, service, composer ou auto")
                 threading.Thread(target=_demander_en_tache, args=(identifiant, phrase, genre), daemon=True).start()
                 return self._json({"ok": True, "id": identifiant})
+            if parties[:2] == ["api", "pages-erreurs"] and len(parties) == 3:
+                erreur = self._corps_json()
+                liste = _erreurs_page(parties[2])
+                entree = {"quand": time.strftime("%H:%M:%S"), **{k: erreur.get(k) for k in ("type", "message", "ligne", "colonne", "source") if erreur.get(k) is not None}}
+                if not any(e.get("message") == entree.get("message") for e in liste):
+                    liste.append(entree)
+                ecrire_json(DOSSIER_ERREURS_PAGES / f"{parties[2]}.json", liste[-30:], sauvegarder=False)
+                return self._json({"ok": True})
             if parties[:2] == ["api", "ameliorer"] and len(parties) == 3:
                 corps = self._corps_json()
                 remarque = (corps.get("remarque") or "").strip()
@@ -396,6 +414,17 @@ class Requete(BaseHTTPRequestHandler):
 
 
 DOSSIER_CREATIONS = registre.DOSSIER_UTILISATEUR / "creations"
+DOSSIER_ERREURS_PAGES = registre.DOSSIER_UTILISATEUR / "pages-erreurs"
+
+
+def _erreurs_page(brique: str) -> list:
+    fichier = DOSSIER_ERREURS_PAGES / f"{brique}.json"
+    if fichier.exists():
+        try:
+            return lire_json(fichier)
+        except Exception:
+            return []
+    return []
 DEMANDE_EN_COURS: dict = {"id": None}
 VERROU_DEMANDE = threading.Lock()
 DEMARRE_A = time.strftime("%H:%M:%S")
@@ -470,7 +499,13 @@ def _ameliorer_en_tache(identifiant: str, brique: str, remarque: str) -> None:
 
     try:
         journal(f"remarque sur « {brique} » : « {remarque} »")
+        erreurs = _erreurs_page(brique)
+        if erreurs:
+            journal(f"{len(erreurs)} erreur(s) observée(s) dans la page, jointes à la remarque")
+            remarque = remarque + "\n\nErreurs observées dans la page par le navigateur :\n" + "\n".join(
+                f"- {e.get('type')} : {e.get('message')}" + (f" (ligne {e['ligne']})" if e.get("ligne") else "") for e in erreurs)
         resultat = mod_creation.ameliorer_brique(brique, remarque, _generer_json_code, journal=journal, annulee=tache.annulee)
+        (DOSSIER_ERREURS_PAGES / f"{brique}.json").unlink(missing_ok=True)
         ecrire_json(DOSSIER_CREATIONS / f"{identifiant}.resultat.json", {"action": "ameliorer", **resultat, "journal": etapes}, sauvegarder=False)
         tache.terminer(resultat["dossier"], etape=f"brique « {resultat['nom']} » mise à jour")
     except ErreurForge as exc:

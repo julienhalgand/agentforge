@@ -101,7 +101,9 @@ SCHEMA_PAGE = {
 SYSTEME_PAGE = (
     "Tu fabriques une application locale pour agentforge sous la forme d'une seule page HTML autonome (HTML, CSS et JavaScript "
     "dans le même fichier, aucune bibliothèque externe, aucun appel réseau). Jolie et simple : fond clair, gros boutons, lisible sur "
-    "téléphone. Tout en français. Tu réponds uniquement par le JSON demandé."
+    "téléphone. Tout en français. Règles : chaque bouton a un gestionnaire (attribut onclick=\"…\" ou addEventListener) ; le script est en "
+    "bas du body, après les éléments qu'il utilise ; pour du son, utilise l'API Web Audio (AudioContext créé au premier clic, jamais au "
+    "chargement) ; pas de fichier audio externe ; teste mentalement que chaque action visible fait quelque chose. Tu réponds uniquement par le JSON demandé."
 )
 
 def _schema_services() -> dict:
