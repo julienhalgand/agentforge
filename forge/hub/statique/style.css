@@ -14,6 +14,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 60px; }
 h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: var(--sourd); margin: 26px 0 10px; }
 .tuiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
 .tuile { background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; min-height: 150px; }
+.tuile.cliquable { cursor: pointer; } .tuile.cliquable:hover { border-color: var(--accent); }
 .tuile .tete { display: flex; align-items: center; gap: 10px; }
 .tuile .icone { font-size: 26px; line-height: 1; }
 .tuile .nom { font-weight: 600; }
@@ -57,3 +58,18 @@ textarea { font-family: ui-monospace, Consolas, monospace; font-size: 13px; min-
 .cadre .titre { padding: 8px 12px; font-size: 13px; color: var(--sourd); border-bottom: 1px solid var(--bord); }
 .cadre iframe { border: 0; width: 100%; height: 520px; background: #fff; }
 @media (max-width: 600px) { .tuiles { grid-template-columns: 1fr; } header { flex-wrap: wrap; } }
+/* pages de détail */
+.entete-detail { display: flex; gap: 16px; align-items: center; margin: 6px 0 4px; }
+.entete-detail .icone { font-size: 40px; }
+.entete-detail h1 { margin: 0; font-size: 22px; }
+.entete-detail .type { color: var(--sourd); font-size: 13px; }
+.colonnes { display: grid; grid-template-columns: 300px 1fr; gap: 14px; align-items: start; }
+.liste-rapports { display: flex; flex-direction: column; gap: 4px; }
+.liste-rapports button { text-align: left; }
+.liste-rapports button.actif { border-color: var(--accent); background: var(--carte-2); }
+.cadre-rapport { border: 1px solid var(--bord); border-radius: 12px; overflow: hidden; background: #0b0d12; }
+.cadre-rapport iframe { border: 0; width: 100%; height: 80vh; }
+.service { background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+.service .contrat { margin-left: 8px; }
+pre.resultat { background: var(--fond); border: 1px solid var(--bord); border-radius: 8px; padding: 10px; font-size: 12px; overflow: auto; max-height: 360px; white-space: pre-wrap; }
+@media (max-width: 800px) { .colonnes { grid-template-columns: 1fr; } }

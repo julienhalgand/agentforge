@@ -1,5 +1,11 @@
 // Fonctions partagées par les pages du hub. Vanilla JS, aucune dépendance.
 
+// replaceChildren ignore null/undefined (sinon ils s'affichent en texte « null »).
+const _replaceChildren = Element.prototype.replaceChildren;
+Element.prototype.replaceChildren = function (...enfants) {
+  return _replaceChildren.apply(this, enfants.flat().filter(e => e !== null && e !== undefined));
+};
+
 async function api(chemin, options = {}) {
   const reponse = await fetch(chemin, {
     headers: { "Content-Type": "application/json" },

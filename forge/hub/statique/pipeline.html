@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agentforge — pipeline</title>
+<link rel="stylesheet" href="/statique/style.css">
+</head>
+<body>
+<header>
+  <h1>⚒ agentforge</h1>
+  <nav><a href="/">Accueil</a><a href="/assembleur">Assembleur</a></nav>
+  <div class="droite" id="barre-etat"></div>
+</header>
+<main>
+  <div id="retour"></div>
+  <div class="entete-detail" id="entete"></div>
+  <div class="actions" id="actions"></div>
+
+  <h2>Étapes</h2>
+  <div class="etapes" id="etapes"></div>
+
+  <h2>Rapports produits</h2>
+  <div class="colonnes" id="bloc-rapports">
+    <div class="liste-rapports" id="liste-rapports"></div>
+    <div class="cadre-rapport" id="cadre-rapport"></div>
+  </div>
+
+  <h2>Dernière exécution</h2>
+  <div id="execution"></div>
+</main>
+<script src="/statique/commun.js"></script>
+<script>
+const NOM = decodeURIComponent(location.pathname.split("/").filter(Boolean)[1] || "");
+let P = null, rapportOuvert = null;
+
+async function charger() {
+  P = await api(`/api/pipelines/${NOM}`);
+  document.title = `agentforge — ${P.nom}`;
+  document.getElementById("barre-etat").textContent = P.en_cours ? "exécution en cours…" : "";
+  const ex = P.execution || {};
+  document.getElementById("entete").replaceChildren(
+    el("span", { class: "icone" }, P.icone),
+    el("div", {},
+      el("h1", {}, P.nom),
+      el("div", { class: "type" }, P.fichier || ""),
+      el("div", { class: "etat" }, el("span", { class: `pastille ${ex.etat || ""}` }), `${texteEtat(ex)} · ${dateCourte(ex.debut_ms)} · ${textePlanification(P.planification)}`)));
+  document.getElementById("actions").replaceChildren(
+    el("p", { class: "type", style: "width:100%;margin:0 0 6px" }, P.description || ""),
+    el("button", { class: "principal", onclick: executer }, "▶ Exécuter"),
+    el("a", { class: "bouton", href: `/assembleur?pipeline=${encodeURIComponent(P.nom)}` }, "✏️ Modifier dans l'assembleur"));
+
+  document.getElementById("etapes").replaceChildren(...P.etapes.flatMap((e, i) => [
+    i > 0 ? el("div", { class: "fleche" }, "↓") : null,
+    el("div", { class: "etape" },
+      el("div", { class: "tete" }, el("span", { class: "numero" }, String(i + 1)), el("strong", {}, e.id), el("a", { href: `/brique/${e.brique}`, class: "contrat" }, `${e.brique}.${e.service}`),
+        ex.durees_s && ex.durees_s[e.id] !== undefined ? el("span", { class: "type", style: "margin-left:auto" }, `${ex.durees_s[e.id]} s`) : null),
+      el("div", { class: "type" }, Object.entries(e.entree || {}).map(([k, v]) => `${k} = ${typeof v === "string" ? v : JSON.stringify(v)}`).join(" · "))),
+  ]));
+
+  const liste = document.getElementById("liste-rapports");
+  if (!P.rapports.length) {
+    liste.replaceChildren(el("div", { class: "type" }, "Aucun rapport produit pour l'instant : exécutez le pipeline."));
+    document.getElementById("cadre-rapport").replaceChildren();
+  } else {
+    if (!rapportOuvert) rapportOuvert = P.rapports[0].url;
+    liste.replaceChildren(...P.rapports.map(r => el("button", { class: r.url === rapportOuvert ? "actif" : "", onclick: () => { rapportOuvert = r.url; charger(); } },
+      `📄 ${r.titre || r.etape} — ${r.date || ""}`, r.resume ? el("small", { class: "type", style: "display:block" }, r.resume) : null)));
+    const cadre = document.getElementById("cadre-rapport");
+    if (!cadre.firstChild || cadre.firstChild.src !== location.origin + rapportOuvert) cadre.replaceChildren(el("iframe", { src: rapportOuvert, title: "rapport" }));
+  }
+
+  document.getElementById("execution").replaceChildren(
+    ex.erreur ? el("div", { class: "erreur" }, texteErreur({ forge: ex.erreur })) : null,
+    ex.manques && ex.manques.length ? el("div", { class: "probleme", style: "margin-top:8px" }, "Manques :\n" + ex.manques.map(m => "  - " + m).join("\n")) : null,
+    el("div", { class: "journal", style: "margin-top:8px" }, (ex.journal || []).join("\n") || "—"),
+    ex.resultats ? el("details", { style: "margin-top:8px" }, el("summary", {}, "Résultats (JSON)"), el("pre", { class: "resultat" }, JSON.stringify(ex.resultats, null, 2))) : null);
+}
+async function executer() {
+  try { const r = await api(`/api/executer/${P.cible}`, { method: "POST" }); if (!r.mise_en_file) alert(r.message); } catch (e) { alert(texteErreur(e)); }
+  setTimeout(charger, 1500);
+}
+charger().catch(e => document.getElementById("retour").replaceChildren(el("div", { class: "erreur" }, texteErreur(e))));
+setInterval(() => { if (P && P.en_cours) charger(); }, 3000);
+</script>
+</body>
+</html>

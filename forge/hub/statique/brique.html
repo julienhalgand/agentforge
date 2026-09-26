@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agentforge — brique</title>
+<link rel="stylesheet" href="/statique/style.css">
+</head>
+<body>
+<header>
+  <h1>⚒ agentforge</h1>
+  <nav><a href="/">Accueil</a><a href="/assembleur">Assembleur</a></nav>
+  <div class="droite" id="barre-etat"></div>
+</header>
+<main>
+  <div id="retour"></div>
+  <div class="entete-detail" id="entete"></div>
+  <div class="actions" id="actions-brique"></div>
+
+  <h2>Rapports</h2>
+  <div class="colonnes" id="bloc-rapports">
+    <div class="liste-rapports" id="liste-rapports"></div>
+    <div class="cadre-rapport" id="cadre-rapport"></div>
+  </div>
+
+  <div id="bloc-page"></div>
+
+  <h2>Services</h2>
+  <div id="services"></div>
+
+  <h2>Dernière exécution</h2>
+  <div id="execution"></div>
+</main>
+
+<dialog id="dialogue-planification">
+  <form method="dialog" id="formulaire-planification">
+    <h3 style="margin-top:0">Planification</h3>
+    <label>Mode</label>
+    <select name="mode" onchange="modeChange(this.value)">
+      <option value="jamais">à la demande (jamais)</option>
+      <option value="quotidien">quotidien à HH:MM</option>
+      <option value="toutes_les_n_heures">toutes les N heures</option>
+    </select>
+    <div id="champ-heure"><label>Heure</label><input name="heure" type="time" value="08:00"></div>
+    <div id="champ-heures" style="display:none"><label>Toutes les N heures</label><input name="heures" type="number" min="1" value="6"></div>
+    <label><input type="checkbox" name="rattrapage" checked style="width:auto"> rattraper au démarrage si une occurrence a été manquée</label>
+    <div class="actions" style="margin-top:14px;justify-content:flex-end">
+      <button type="button" onclick="document.getElementById('dialogue-planification').close()">Annuler</button>
+      <button class="principal" type="submit">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="/statique/commun.js"></script>
+<script>
+const NOM = decodeURIComponent(location.pathname.split("/").filter(Boolean)[1] || "");
+let B = null;
+let rapportOuvert = null;
+
+async function charger() {
+  B = await api(`/api/briques/${NOM}`);
+  document.title = `agentforge — ${B.nom}`;
+  document.getElementById("barre-etat").textContent = B.en_cours ? "exécution en cours…" : "";
+  const ex = B.execution || {};
+  document.getElementById("entete").replaceChildren(
+    el("span", { class: "icone" }, B.icone),
+    el("div", {},
+      el("h1", {}, `${B.nom} ${B.version}`),
+      el("div", { class: "type" }, `${B.type} · ${B.dossier}`),
+      el("div", { class: "etat" }, el("span", { class: `pastille ${ex.etat || ""}` }), `${texteEtat(ex)} · ${dateCourte(ex.debut_ms)} · ${textePlanification(B.planification)}`),
+    ));
+  const actions = [];
+  if (B.executable) actions.push(el("button", { class: "principal", onclick: executer }, "▶ Exécuter"));
+  else actions.push(el("span", { class: "type" }, "🔗 s'exécute via un pipeline (son service attend une donnée produite par une autre brique) "));
+  actions.push(el("button", { onclick: dialoguePlanification }, "🕒 Planifier"));
+  actions.push(el("button", { onclick: ouvrirEditeur }, "📝 Ouvrir dans l'éditeur"));
+  if (B.page) actions.push(el("a", { class: "bouton", href: B.page, target: "_blank" }, "🖥 Page dans un onglet"));
+  document.getElementById("actions-brique").replaceChildren(el("p", { class: "type", style: "width:100%;margin:0 0 6px" }, B.description), ...actions);
+
+  // rapports
+  const liste = document.getElementById("liste-rapports");
+  if (!B.rapports.length) {
+    liste.replaceChildren(el("div", { class: "type" }, "Aucun rapport pour l'instant. Exécutez la brique (ou le pipeline qui la contient) : les rapports apparaîtront ici, un par date."));
+    document.getElementById("cadre-rapport").replaceChildren();
+  } else {
+    if (!rapportOuvert) rapportOuvert = B.rapports[0].url;
+    liste.replaceChildren(...B.rapports.map(r => el("button", { class: r.url === rapportOuvert ? "actif" : "", onclick: () => { rapportOuvert = r.url; charger(); } },
+      `📄 ${r.date} `, r.markdown ? el("a", { href: r.markdown, target: "_blank", class: "type", style: "float:right", onclick: (e) => e.stopPropagation() }, ".md") : null)));
+    const cadre = document.getElementById("cadre-rapport");
+    if (!cadre.firstChild || cadre.firstChild.src !== location.origin + rapportOuvert) {
+      cadre.replaceChildren(el("iframe", { src: rapportOuvert, title: "rapport" }));
+    }
+  }
+
+  // page interactive (forme B)
+  const blocPage = document.getElementById("bloc-page");
+  blocPage.replaceChildren();
+  if (B.page) {
+    blocPage.append(el("h2", {}, "Page interactive"), el("div", { class: "cadre-rapport" }, el("iframe", { src: B.page, title: "page" })));
+  }
+
+  // services : un formulaire par service
+  document.getElementById("services").replaceChildren(...B.services.map(blocService));
+
+  // exécution
+  document.getElementById("execution").replaceChildren(
+    ex.erreur ? el("div", { class: "erreur" }, texteErreur({ forge: ex.erreur })) : null,
+    ex.manques && ex.manques.length ? el("div", { class: "probleme", style: "margin-top:8px" }, "Manques :\n" + ex.manques.map(m => "  - " + m).join("\n")) : null,
+    el("div", { class: "journal", style: "margin-top:8px" }, (ex.journal || []).join("\n") || "—"),
+    ex.resultats ? el("details", { style: "margin-top:8px" }, el("summary", {}, "Résultat (JSON)"), el("pre", { class: "resultat" }, JSON.stringify(ex.resultats, null, 2))) : null,
+  );
+}
+
+function blocService(s) {
+  const schema = typeof s.entree === "object" ? s.entree : { properties: {} };
+  const requis = new Set(schema.required || []);
+  const valeurs = { ...(s.exemple || {}) };
+  const champs = Object.entries(schema.properties || {}).map(([nom, sch]) => champService(nom, sch, requis.has(nom), valeurs));
+  const sortie = el("div", {});
+  const bouton = el("button", { class: "principal", onclick: async () => {
+    bouton.disabled = true; sortie.replaceChildren(el("div", { class: "type" }, "appel en cours…"));
+    try {
+      const r = await api(`/api/appeler/${B.nom}/${s.nom}`, { method: "POST", body: nettoyer(valeurs) });
+      const res = r.resultat;
+      sortie.replaceChildren(
+        res && res.manques && res.manques.length ? el("div", { class: "probleme" }, "Réponse partielle, manques :\n" + res.manques.map(m => "  - " + m).join("\n")) : el("div", { class: "ok" }, "Réponse conforme au contrat " + nomContrat(s.sortie)),
+        res && res.html ? el("div", { style: "margin:8px 0" }, el("a", { class: "bouton", href: `/rapports/${B.nom}/${res.html}`, target: "_blank" }, `📄 Ouvrir le rapport ${res.date || ""}`)) : null,
+        el("pre", { class: "resultat" }, JSON.stringify(res, null, 2)));
+      charger();
+    } catch (e) { sortie.replaceChildren(el("div", { class: "erreur" }, texteErreur(e))); }
+    bouton.disabled = false;
+  } }, `▶ Appeler ${s.nom}`);
+  return el("div", { class: "service" },
+    el("div", { class: "tete", style: "display:flex;align-items:center;gap:8px" }, el("strong", {}, s.nom), el("span", { class: "contrat" }, `→ ${nomContrat(s.sortie)}`)),
+    el("div", { class: "type", style: "margin:4px 0 8px" }, s.description),
+    el("div", { class: "champs" }, ...champs),
+    el("div", { class: "actions", style: "margin-top:10px" }, bouton),
+    sortie);
+}
+
+function champService(nom, sch, requis, valeurs) {
+  const c = el("div", { class: "champ" }, el("label", {}, nom + (requis ? " *" : "")));
+  const estContrat = typeof sch === "string" || sch.$ref || sch.type === "object";
+  if (estContrat) {
+    const t = el("textarea", { placeholder: `JSON conforme à ${nomContrat(sch)}`, onchange: (ev) => { try { valeurs[nom] = JSON.parse(ev.target.value); ev.target.style.borderColor = ""; } catch (_) { ev.target.style.borderColor = "var(--critique)"; } } });
+    if (valeurs[nom] !== undefined) t.value = JSON.stringify(valeurs[nom], null, 2);
+    c.append(t, el("small", {}, `attend ${nomContrat(sch)} — en général produit par une autre brique via un pipeline`));
+  } else if (sch.enum) {
+    if (valeurs[nom] === undefined) valeurs[nom] = sch.default !== undefined ? sch.default : sch.enum[0];
+    c.append(el("select", { onchange: (ev) => { valeurs[nom] = ev.target.value; } }, ...sch.enum.map(v => el("option", { value: v, selected: valeurs[nom] === v ? "selected" : null }, v))), el("small", {}, sch.description || ""));
+  } else if (sch.type === "boolean") {
+    c.append(el("select", { onchange: (ev) => { valeurs[nom] = ev.target.value === "true"; } }, el("option", { value: "false" }, "non"), el("option", { value: "true", selected: valeurs[nom] ? "selected" : null }, "oui")), el("small", {}, sch.description || ""));
+  } else if (sch.type === "array") {
+    c.append(el("input", { value: Array.isArray(valeurs[nom]) ? valeurs[nom].join(", ") : "", placeholder: "valeurs séparées par des virgules", onchange: (ev) => { valeurs[nom] = ev.target.value.split(",").map(x => x.trim()).filter(Boolean); } }), el("small", {}, sch.description || "liste"));
+  } else {
+    const estNombre = sch.type === "number" || sch.type === "integer";
+    c.append(el("input", { type: estNombre ? "number" : "text", step: sch.type === "number" ? "any" : null, value: valeurs[nom] ?? sch.default ?? "", min: sch.minimum ?? null, max: sch.maximum ?? null,
+      onchange: (ev) => { valeurs[nom] = ev.target.value === "" ? undefined : (estNombre ? Number(ev.target.value) : ev.target.value); } }), el("small", {}, sch.description || sch.type || ""));
+  }
+  return c;
+}
+function nettoyer(o) { return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== "")); }
+
+async function executer() {
+  try { const r = await api(`/api/executer/${B.cible}`, { method: "POST" }); if (!r.mise_en_file) alert(r.message); } catch (e) { alert(texteErreur(e)); }
+  setTimeout(charger, 1500);
+}
+async function ouvrirEditeur() { try { await api(`/api/ouvrir-editeur/${B.nom}`, { method: "POST" }); } catch (e) { alert(texteErreur(e)); } }
+function dialoguePlanification() {
+  const f = document.getElementById("formulaire-planification"); const p = B.planification || {};
+  f.mode.value = p.mode || "jamais"; f.heure.value = p.heure || "08:00"; f.heures.value = p.heures || 6; f.rattrapage.checked = p.rattrapage !== false;
+  modeChange(f.mode.value); document.getElementById("dialogue-planification").showModal();
+}
+function modeChange(mode) {
+  document.getElementById("champ-heure").style.display = mode === "quotidien" ? "" : "none";
+  document.getElementById("champ-heures").style.display = mode === "toutes_les_n_heures" ? "" : "none";
+}
+document.getElementById("formulaire-planification").addEventListener("submit", async () => {
+  const f = document.getElementById("formulaire-planification");
+  const p = { mode: f.mode.value, rattrapage: f.rattrapage.checked };
+  if (p.mode === "quotidien") p.heure = f.heure.value;
+  if (p.mode === "toutes_les_n_heures") p.heures = parseInt(f.heures.value, 10);
+  try { await api(`/api/planification/${B.cible}`, { method: "POST", body: p }); } catch (e) { alert(texteErreur(e)); }
+  charger();
+});
+
+charger().catch(e => document.getElementById("retour").replaceChildren(el("div", { class: "erreur" }, texteErreur(e))));
+setInterval(() => { if (B && B.en_cours) charger(); }, 3000);
+</script>
+</body>
+</html>

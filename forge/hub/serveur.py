@@ -104,7 +104,61 @@ def _rapports(m: mod_manifeste.Manifeste) -> list[dict]:
     if not dossier.is_dir():
         return []
     fichiers = sorted((f for f in dossier.glob("rapport_*.html")), reverse=True)
-    return [{"nom": f.name, "url": f"/rapports/{m.nom}/{f.name}", "date": f.stem.replace("rapport_", "")} for f in fichiers]
+    rapports = []
+    for f in fichiers:
+        md = f.with_suffix(".md")
+        rapports.append({
+            "nom": f.name,
+            "url": f"/rapports/{m.nom}/{f.name}",
+            "markdown": f"/rapports/{m.nom}/{md.name}" if md.exists() else None,
+            "date": f.stem.replace("rapport_", ""),
+        })
+    return rapports
+
+
+def _detail_brique(nom: str) -> dict:
+    m = registre.trouver_brique(nom)
+    cible = f"brique:{m.nom}"
+    plan = PLANIFICATEUR.planification(cible, m.planification)
+    return {
+        **m.en_json(),
+        "cible": cible,
+        "planification": plan,
+        "execution": PLANIFICATEUR.etat(cible),
+        "rapports": _rapports(m),
+        "page": f"/pages/{m.nom}/" if m.page else None,
+        "livree": registre.RACINE_DEPOT in m.dossier.parents,
+        "executable": _executable(m, plan),
+        "en_cours": PLANIFICATEUR.en_cours == cible,
+    }
+
+
+def _detail_pipeline(nom: str) -> dict:
+    m = registre.trouver_pipeline(nom)
+    cible = f"pipeline:{m.nom}"
+    execution = PLANIFICATEUR.etat(cible)
+    # rapports produits par les étapes dont la sortie est un rapport@1
+    produits = []
+    for brut in m.etapes:
+        try:
+            brique = registre.trouver_brique(brut["brique"])
+            service = brique.service(brut["service"])
+        except (ErreurForge, KeyError):
+            continue
+        if service.sortie == "forge://document/rapport@1":
+            resultat = (execution.get("resultats") or {}).get(brut.get("id"), {})
+            if isinstance(resultat, dict) and resultat.get("html"):
+                produits.append({"etape": brut.get("id"), "brique": brique.nom, "titre": resultat.get("titre"), "date": resultat.get("date"),
+                                 "url": f"/rapports/{brique.nom}/{resultat['html']}", "resume": resultat.get("resume"), "alertes": resultat.get("alertes", [])})
+    return {
+        **m.en_json(),
+        "cible": cible,
+        "planification": PLANIFICATEUR.planification(cible, m.planification),
+        "execution": execution,
+        "fichier": m.brut.get("_fichier"),
+        "rapports": produits,
+        "en_cours": PLANIFICATEUR.en_cours == cible,
+    }
 
 
 def _vues() -> list[dict]:
@@ -176,6 +230,14 @@ class Requete(BaseHTTPRequestHandler):
                 return self._fichier(DOSSIER_STATIQUE / parties[1], DOSSIER_STATIQUE)
             if parties[:1] == ["vue"] and len(parties) == 2:
                 return self._fichier(DOSSIER_STATIQUE / "vue.html")
+            if parties[:1] == ["brique"] and len(parties) == 2:
+                return self._fichier(DOSSIER_STATIQUE / "brique.html")
+            if parties[:1] == ["pipeline"] and len(parties) == 2:
+                return self._fichier(DOSSIER_STATIQUE / "pipeline.html")
+            if parties[:2] == ["api", "briques"] and len(parties) == 3:
+                return self._json(_detail_brique(parties[2]))
+            if parties[:2] == ["api", "pipelines"] and len(parties) == 3:
+                return self._json(_detail_pipeline(parties[2]))
             if chemin == "/api/etat":
                 return self._json(_etat_global())
             if parties[:2] == ["api", "executions"] and len(parties) == 3:

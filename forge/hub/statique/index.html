@@ -111,8 +111,10 @@ function menu(...boutons) {
   return m;
 }
 
+function ouvrir(url) { return (e) => { if (e.target.closest("button, a, .menu")) return; location.href = url; }; }
+
 function tuilePipeline(p) {
-  return el("div", { class: "tuile" },
+  return el("div", { class: "tuile cliquable", onclick: ouvrir(`/pipeline/${p.nom}`) },
     el("div", { class: "tete" }, el("span", { class: "icone" }, p.icone), el("div", {}, el("div", { class: "nom" }, p.nom), el("div", { class: "type" }, `pipeline · ${p.etapes.length} étape(s)`)),
       menu(
         el("button", { onclick: () => dialoguePlanification(p.cible, p.planification) }, "🕒 Planifier"),
@@ -123,6 +125,7 @@ function tuilePipeline(p) {
     ligneEtat(p),
     el("div", { class: "actions" },
       el("button", { class: "principal", onclick: () => executer(p.cible) }, "▶ Exécuter"),
+      el("a", { class: "bouton", href: `/pipeline/${p.nom}` }, "Ouvrir →"),
       ...(p.execution && p.execution.erreur ? [el("button", { onclick: () => detail(p.cible) }, "⚠ voir l'erreur")] : []),
     ));
 }
@@ -145,7 +148,8 @@ function tuileBrique(b) {
     el("button", { onclick: () => ouvrirEditeur(b.nom) }, "📝 Ouvrir dans l'éditeur"),
   ];
   if (!b.livree) options.push(el("button", { onclick: () => supprimer(b.nom) }, "🗑 Supprimer (corbeille)"));
-  return el("div", { class: "tuile" },
+  actions.push(el("a", { class: "bouton", href: `/brique/${b.nom}` }, "Ouvrir →"));
+  return el("div", { class: "tuile cliquable", onclick: ouvrir(`/brique/${b.nom}`) },
     el("div", { class: "tete" }, el("span", { class: "icone" }, b.icone), el("div", {}, el("div", { class: "nom" }, `${b.nom} ${b.version}`), el("div", { class: "type" }, `${b.type} · ${b.services.map(s => s.nom).join(", ")}`)), menu(...options)),
     el("div", { class: "desc" }, b.description),
     ligneEtat(b),
