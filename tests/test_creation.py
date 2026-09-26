@@ -6,6 +6,7 @@ d'essai réel doit refuser les deux premières versions et installer la troisiè
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
