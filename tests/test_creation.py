@@ -120,3 +120,22 @@ def test_composer_pipeline_corrige_un_branchement_invalide(dossier_utilisateur):
     fichier = creation.enregistrer_pipeline(p)
     m = registre.trouver_pipeline("btc-commente")
     assert m.brut["_fichier"] == str(fichier) and [e.identifiant for e in pipeline.verifier(m)] == ["prix", "rapport"]
+
+
+def test_composer_normalise_brique_point_service(dossier_utilisateur):
+    brut = {"nom": "x-y", "description": "x", "planification": {"mode": "jamais"},
+            "etapes": [{"id": "prix", "brique": "prix-agent.historique", "service": "", "entree": {"actif": "BTC", "intervalle": "1d", "limite": 30}}]}
+    p = creation.composer_pipeline("bougies", lambda c, s, sy: brut)
+    assert p["etapes"][0]["brique"] == "prix-agent" and p["etapes"][0]["service"] == "historique"
+
+
+def test_decider_et_brique_avec_page(dossier_utilisateur):
+    assert creation.decider("je veux un métronome", lambda c, s, sy: {"action": "creer", "raison": "aucune brique ne fait ça"})["action"] == "creer"
+    spec = {"nom": "metronome", "description": "Un métronome.", "icone": "🎵", "services": [],
+            "page": "<!doctype html><html lang='fr'><body><h1>Métronome</h1><button>Démarrer</button></body></html>"}
+    r = creation.creer_brique("je veux un métronome", lambda c, s, sy: spec)
+    m = registre.trouver_brique("metronome")
+    assert m.page and m.page.read_text(encoding="utf-8").startswith("<!doctype") and m.services == []
+    with pytest.raises(ErreurForge) as exc:
+        creation.creer_brique("rien", lambda c, s, sy: {**spec, "nom": "vide", "page": "", "services": []}, tours=1)
+    assert any("au moins un service ou une page" in d for d in exc.value.details)

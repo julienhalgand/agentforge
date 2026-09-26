@@ -300,6 +300,23 @@ class Requete(BaseHTTPRequestHandler):
                 identifiant = f"creation-{int(time.time())}"
                 threading.Thread(target=_creer_brique_en_tache, args=(identifiant, phrase), daemon=True).start()
                 return self._json({"ok": True, "id": identifiant})
+            if chemin == "/api/demander":
+                corps = self._corps_json()
+                phrase = (corps.get("phrase") or "").strip()
+                if len(phrase) < 6:
+                    raise ErreurForge("dis ce que tu veux, en une phrase", "ex. « je veux un métronome » ou « chaque matin, le prix du bitcoin et un rapport »")
+                decision = mod_creation.decider(phrase, _generer_json_modele)
+                if decision["action"] == "composer":
+                    journal: list[str] = []
+                    try:
+                        pipeline = mod_creation.composer_pipeline(phrase, _generer_json_modele, journal=journal.append)
+                        fichier = mod_creation.enregistrer_pipeline(pipeline)
+                        return self._json({"action": "composer", "raison": decision["raison"], "pipeline": pipeline, "fichier": str(fichier), "journal": journal})
+                    except ErreurForge:
+                        pass  # les briques ne suffisent pas : on en crée une
+                identifiant = f"creation-{int(time.time())}"
+                threading.Thread(target=_creer_brique_en_tache, args=(identifiant, phrase), daemon=True).start()
+                return self._json({"action": "creer", "raison": decision["raison"], "id": identifiant})
             if chemin == "/api/composer":
                 corps = self._corps_json()
                 phrase = (corps.get("phrase") or "").strip()

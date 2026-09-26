@@ -18,31 +18,19 @@
   <nav><a href="/">Accueil</a><a href="/assembleur">Assembleur</a><a href="/creer" class="actif">Créer</a></nav>
 </header>
 <main>
-  <div class="carte">
-    <h3>Composer avec les briques existantes</h3>
-    <p style="color:var(--sourd);margin:0 0 10px">Dis ce que tu veux obtenir ; les briques déjà installées sont reliées entre elles et le résultat s'ouvre dans l'assembleur pour un coup d'œil.</p>
-    <textarea id="phrase-pipeline" class="grand-champ" placeholder="ex. chaque matin, récupère le prix du bitcoin et fais-moi un rapport commenté"></textarea>
+  <div class="carte" style="margin-top:8px">
+    <h3>Dis ce que tu veux</h3>
+    <p style="color:var(--sourd);margin:0 0 10px">Une phrase suffit. Si les briques installées peuvent le faire, elles sont assemblées ; sinon une nouvelle brique est créée et testée (une à quelques minutes).</p>
+    <textarea id="phrase" class="grand-champ" placeholder="ex. je veux un métronome · chaque matin, le prix du bitcoin et un rapport commenté · la météo de Nantes pour 3 jours"></textarea>
     <div class="exemples">
-      <button onclick="exemple('phrase-pipeline', 'chaque matin, récupère les bougies du bitcoin et fais-moi un rapport de marché')">rapport quotidien</button>
-      <button onclick="exemple('phrase-pipeline', 'le prix du bitcoin, un rapport, et un commentaire du modèle en trois phrases')">rapport commenté</button>
+      <button onclick="exemple('phrase', 'je veux un métronome')">métronome</button>
+      <button onclick="exemple('phrase', 'chaque matin, récupère les bougies du bitcoin et fais-moi un rapport de marché')">rapport quotidien</button>
+      <button onclick="exemple('phrase', 'me donner la météo de Nantes pour les 3 prochains jours')">météo</button>
+      <button onclick="exemple('phrase', 'convertir un montant en euros vers une autre devise au cours du jour')">devises</button>
     </div>
-    <div class="actions" style="margin-top:12px"><button class="principal" id="composer" onclick="composer()">Composer</button><small id="composer-etat"></small></div>
-    <div id="composer-retour" style="margin-top:10px"></div>
-  </div>
-
-  <div class="carte">
-    <h3>Créer une nouvelle brique</h3>
-    <p style="color:var(--sourd);margin:0 0 10px">Décris ce que la brique doit faire. Le modèle local l'écrit, agentforge la teste pour de vrai, et elle apparaît sur l'accueil. Ça prend une à quelques minutes.</p>
-    <textarea id="phrase-brique" class="grand-champ" placeholder="ex. me donner la météo de Nantes pour les 3 prochains jours"></textarea>
-    <div class="exemples">
-      <button onclick="exemple('phrase-brique', 'me donner la météo de Nantes pour les 3 prochains jours')">météo</button>
-      <button onclick="exemple('phrase-brique', 'convertir un montant en euros vers une autre devise au cours du jour')">devises</button>
-      <button onclick="exemple('phrase-brique', 'calculer les statistiques (moyenne, médiane, écart-type) d\'une liste de nombres')">statistiques</button>
-    </div>
-    <div class="actions" style="margin-top:12px"><button class="principal" id="creer" onclick="creer()">Créer la brique</button><small id="creer-etat"></small></div>
+    <div class="actions" style="margin-top:12px"><button class="principal" id="demander" onclick="demander()">C'est parti</button><small id="etat"></small></div>
     <div class="barre" id="barre-creation" style="display:none"><div id="barre"></div></div>
-    <div id="creer-retour" style="margin-top:10px"></div>
-    <div class="journal journal-creation" id="journal" style="display:none"></div>
+    <div id="retour" style="margin-top:10px"></div>
   </div>
 </main>
 <script src="/statique/commun.js"></script>
@@ -50,46 +38,41 @@
 function exemple(id, texte) { document.getElementById(id).value = texte; }
 let creationEnCours = localStorage.getItem("creation-en-cours") || null;
 
-async function composer() {
-  const phrase = document.getElementById("phrase-pipeline").value.trim();
-  const bouton = document.getElementById("composer"), etat = document.getElementById("composer-etat"), retour = document.getElementById("composer-retour");
-  bouton.disabled = true; etat.textContent = "le modèle compose… (quelques secondes à une minute)"; retour.replaceChildren();
+async function demander() {
+  const phrase = document.getElementById("phrase").value.trim();
+  const bouton = document.getElementById("demander"), etat = document.getElementById("etat"), retour = document.getElementById("retour");
+  bouton.disabled = true; etat.textContent = "je regarde ce qui existe déjà…"; retour.replaceChildren();
   try {
-    const r = await api("/api/composer", { method: "POST", body: { phrase } });
-    const p = r.pipeline;
-    retour.replaceChildren(
-      el("div", { class: "ok" }, `Pipeline « ${p.nom} » : ${p.etapes.map(e => `${e.brique}.${e.service}`).join(" → ")} · ${textePlanification(p.planification)}`),
-      el("div", { class: "actions", style: "margin-top:10px" },
-        el("a", { class: "bouton principal", href: `/assembleur?pipeline=${encodeURIComponent(p.nom)}` }, "Voir dans l'assembleur"),
-        el("button", { onclick: async () => { await api(`/api/executer/pipeline:${p.nom}`, { method: "POST" }); location.href = `/pipeline/${p.nom}`; } }, "▶ Exécuter maintenant")));
-  } catch (e) { retour.replaceChildren(el("div", { class: "erreur" }, texteErreur(e))); }
-  bouton.disabled = false; etat.textContent = "";
-}
-
-async function creer() {
-  const phrase = document.getElementById("phrase-brique").value.trim();
-  const retour = document.getElementById("creer-retour"); retour.replaceChildren();
-  try {
-    const r = await api("/api/creer-brique", { method: "POST", body: { phrase } });
-    creationEnCours = r.id; localStorage.setItem("creation-en-cours", r.id);
-    suivre();
-  } catch (e) { retour.replaceChildren(el("div", { class: "erreur" }, texteErreur(e))); }
+    const r = await api("/api/demander", { method: "POST", body: { phrase } });
+    if (r.action === "composer") {
+      const p = r.pipeline;
+      retour.replaceChildren(
+        el("div", { class: "ok" }, `Assemblé avec les briques existantes : ${p.etapes.map(e => `${e.brique}.${e.service}`).join(" → ")} · ${textePlanification(p.planification)}`),
+        el("small", {}, r.raison),
+        el("div", { class: "actions", style: "margin-top:10px" },
+          el("button", { class: "principal", onclick: async () => { await api(`/api/executer/pipeline:${p.nom}`, { method: "POST" }); location.href = `/pipeline/${p.nom}`; } }, "▶ Lancer"),
+          el("a", { class: "bouton", href: `/assembleur?pipeline=${encodeURIComponent(p.nom)}` }, "Voir le détail")));
+      bouton.disabled = false; etat.textContent = "";
+    } else {
+      creationEnCours = r.id; localStorage.setItem("creation-en-cours", r.id);
+      retour.replaceChildren(el("small", {}, `Nouvelle brique : ${r.raison}`));
+      suivre();
+    }
+  } catch (e) { retour.replaceChildren(el("div", { class: "erreur" }, texteErreur(e))); bouton.disabled = false; etat.textContent = ""; }
 }
 
 async function suivre() {
   if (!creationEnCours) return;
   const t = await api(`/api/creations/${creationEnCours}`);
-  const bouton = document.getElementById("creer"), etat = document.getElementById("creer-etat"), retour = document.getElementById("creer-retour");
-  const barre = document.getElementById("barre-creation"), journal = document.getElementById("journal");
+  const bouton = document.getElementById("demander"), etat = document.getElementById("etat"), retour = document.getElementById("retour"), barre = document.getElementById("barre-creation");
   if (t.etat === "en_cours") {
-    bouton.disabled = true; barre.style.display = ""; document.getElementById("barre").style.width = `${t.pourcentage}%`;
-    etat.textContent = t.etape || "en cours…"; journal.style.display = "none";
+    bouton.disabled = true; barre.style.display = ""; document.getElementById("barre").style.width = `${t.pourcentage}%`; etat.textContent = t.etape || "en cours…";
   } else if (t.etat === "termine") {
     bouton.disabled = false; barre.style.display = "none"; etat.textContent = "";
     const d = t.resultat_detail || {};
     retour.replaceChildren(
       el("div", { class: "ok" }, `${t.etape} en ${d.tours || "?"} tour(s)`),
-      el("div", { class: "actions", style: "margin-top:10px" }, el("a", { class: "bouton principal", href: `/brique/${d.nom}` }, `Ouvrir la brique ${d.nom} ›`), el("a", { class: "bouton", href: "/" }, "Accueil")),
+      el("div", { class: "actions", style: "margin-top:10px" }, el("a", { class: "bouton principal", href: `/brique/${d.nom}` }, `Ouvrir ${d.nom} ›`), el("a", { class: "bouton", href: "/" }, "Accueil")),
       d.journal ? el("details", { style: "margin-top:8px" }, el("summary", {}, "ce qui s'est passé"), el("div", { class: "journal" }, d.journal.join("\n"))) : null);
     localStorage.removeItem("creation-en-cours"); creationEnCours = null;
   } else if (t.etat === "echec") {

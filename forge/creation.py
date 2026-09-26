@@ -57,9 +57,10 @@ SCHEMA_BRIQUE = {
         "nom": {"type": "string", "pattern": "^[a-z][a-z0-9-]{1,30}$", "description": "nom court en minuscules et tirets, ex. meteo-nantes"},
         "description": {"type": "string"},
         "icone": {"type": "string", "description": "un seul emoji"},
+        "page": {"type": "string", "description": "optionnel : page HTML complète et autonome (HTML+CSS+JS dans un seul fichier, sans bibliothèque externe) pour une brique interactive : métronome, chronomètre, jeu, formulaire…"},
         "services": {
             "type": "array",
-            "minItems": 1,
+            "minItems": 0,
             "maxItems": 3,
             "items": {
                 "type": "object",
@@ -91,7 +92,9 @@ SYSTEME_BRIQUE = (
     "pour signaler un problème lève `from forge.utils.erreurs import ErreurForge` : ErreurForge(cause, remede). "
     "La fonction s'appelle exactement `executer(entree)` ; `entree` est un dict avec les champs d'entrée ; elle rend un dict avec les champs de sortie. "
     "N'invente pas d'API : utilise des services publics sans clé (Open-Meteo, Wikipédia, Binance, CoinGecko, frankfurter.app…). "
-    "Tous les noms, descriptions et messages sont en français."
+    "Tous les noms, descriptions et messages sont en français. "
+    "Si la demande est un outil interactif (métronome, minuteur, jeu, bloc-notes…), rends une « page » HTML complète et autonome, "
+    "jolie et simple (fond clair, gros boutons), et une liste de services vide. Sinon, des services et pas de page."
 )
 
 
@@ -173,6 +176,11 @@ def gabarit(spec: dict, phrase: str, dossier: Path) -> mod_manifeste.Manifeste:
                 problemes.append(f"service {s['nom']} : {exc.cause}")
         elif not s["sortie"].get("champs"):
             problemes.append(f"service {s['nom']} : sortie « champs » sans aucun champ")
+    page = (spec.get("page") or "").strip()
+    if page and "<html" not in page.lower():
+        problemes.append("la page doit être un document HTML complet (<!doctype html><html>…)")
+    if not spec["services"] and not page:
+        problemes.append("il faut au moins un service ou une page")
     if problemes:
         raise ErreurForge("spécification refusée", "corrige chaque point", problemes)
 
@@ -200,23 +208,24 @@ def gabarit(spec: dict, phrase: str, dossier: Path) -> mod_manifeste.Manifeste:
         GABARIT_SERVEUR.format(description=spec["description"], phrase=phrase.replace('"', "'"), nom=spec["nom"], enregistrements="\n".join(enregistrements)),
         encoding="utf-8",
     )
-    ecrire_json(
-        dossier / "forge.json",
-        {
-            "forge": 1,
-            "type": "application",
-            "nom": spec["nom"],
-            "version": "0.1.0",
-            "description": spec["description"],
-            "icone": spec.get("icone", "🧩"),
-            "interpreteur": "python",
-            "transport": {"type": "mcp-stdio", "commande": ["-m", f"{module}.serveur"]},
-            "services": services_manifeste,
-            "planification": {"mode": "jamais"},
-            "creee_depuis": phrase,
-        },
-        sauvegarder=False,
-    )
+    manifeste_brut = {
+        "forge": 1,
+        "type": "application",
+        "nom": spec["nom"],
+        "version": "0.1.0",
+        "description": spec["description"],
+        "icone": spec.get("icone", "🧩"),
+        "interpreteur": "python",
+        "transport": {"type": "mcp-stdio", "commande": ["-m", f"{module}.serveur"]},
+        "services": services_manifeste,
+        "planification": {"mode": "jamais"},
+        "creee_depuis": phrase,
+    }
+    if page:
+        (dossier / "page").mkdir(exist_ok=True)
+        (dossier / "page" / "index.html").write_text(page, encoding="utf-8")
+        manifeste_brut["page"] = "page/index.html"
+    ecrire_json(dossier / "forge.json", manifeste_brut, sauvegarder=False)
     return mod_manifeste.charger(dossier)
 
 
@@ -360,6 +369,11 @@ def composer_pipeline(phrase: str, generer_json: GenererJSON, journal=None, tour
         demande = consigne if not dernier_probleme else consigne + f"\n\nTa proposition précédente :\n{json.dumps(brut, ensure_ascii=False)}\n\nElle est invalide :\n{dernier_probleme}\n\nCorrige-la."
         try:
             brut = generer_json(demande, SCHEMA_PIPELINE, SYSTEME_PIPELINE)
+            for etape in brut.get("etapes", []):
+                if isinstance(etape.get("brique"), str) and "." in etape["brique"] and not etape.get("service"):
+                    etape["brique"], etape["service"] = etape["brique"].split(".", 1)
+                elif isinstance(etape.get("brique"), str) and "." in etape["brique"] and etape["brique"].endswith("." + str(etape.get("service"))):
+                    etape["brique"] = etape["brique"].rsplit(".", 1)[0]
             pipeline = {"forge": 1, "type": "pipeline", "version": "0.1.0", "icone": "🔗", **brut, "creee_depuis": phrase}
             m = mod_manifeste.Manifeste(dossier=registre.DOSSIER_UTILISATEUR / "pipelines", brut=pipeline)
             schemas.valider(pipeline, mod_manifeste.SCHEMA_MANIFESTE, contexte="pipeline")
@@ -379,3 +393,29 @@ def enregistrer_pipeline(pipeline: dict) -> Path:
 
 def nettoyer_nom(nom: str) -> str:
     return re.sub(r"[^a-z0-9-]", "-", nom.lower()).strip("-")[:40]
+
+
+# --- un seul champ : composer ou créer ? -----------------------------------------------------
+
+SCHEMA_DECISION = {
+    "type": "object",
+    "required": ["action", "raison"],
+    "properties": {
+        "action": {"type": "string", "enum": ["composer", "creer"]},
+        "raison": {"type": "string"},
+    },
+}
+
+SYSTEME_DECISION = (
+    "Tu décides comment satisfaire une demande dans agentforge. « composer » = la demande se réalise en reliant "
+    "des briques déjà installées (elles sont listées) ; « creer » = il manque une capacité, il faut fabriquer une nouvelle brique. "
+    "Réponds uniquement par le JSON demandé, raison en une phrase en français."
+)
+
+
+def decider(phrase: str, generer_json: GenererJSON) -> dict:
+    consigne = f"Demande : « {phrase} ».\n\nBriques installées :\n{_catalogue_briques()}"
+    d = generer_json(consigne, SCHEMA_DECISION, SYSTEME_DECISION)
+    if d.get("action") not in ("composer", "creer"):
+        raise ErreurForge("décision inutilisable", "réessayez")
+    return d
