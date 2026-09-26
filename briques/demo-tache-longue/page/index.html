@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>demo-tache-longue</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 18px; background: #0b0d12; color: #e6e9ef; font: 15px/1.5 system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 4px; } p.sourd { color: #9aa3b2; margin: 0 0 14px; font-size: 13px; }
+  label { display: block; font-size: 13px; color: #9aa3b2; margin: 8px 0 4px; }
+  input { background: #151922; color: #e6e9ef; border: 1px solid #262b36; border-radius: 8px; padding: 7px 9px; font: inherit; width: 160px; }
+  button { background: #1b2029; color: #e6e9ef; border: 1px solid #262b36; border-radius: 8px; padding: 7px 12px; font: inherit; cursor: pointer; margin-right: 6px; }
+  button.principal { background: #f2b134; color: #111; font-weight: 600; border-color: #f2b134; }
+  button:disabled { opacity: .5; cursor: default; }
+  .barre { height: 14px; background: #151922; border: 1px solid #262b36; border-radius: 7px; overflow: hidden; margin: 14px 0 6px; }
+  .barre div { height: 100%; background: #f2b134; width: 0; transition: width .3s; }
+  .etat { font-family: ui-monospace, Consolas, monospace; font-size: 13px; color: #9aa3b2; white-space: pre-wrap; }
+  .termine .barre div { background: #5ad17a; } .annule .barre div { background: #9aa3b2; } .echec .barre div { background: #ff6b6b; }
+  ul { padding-left: 18px; color: #9aa3b2; font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>⏳ Démonstration : tâche longue</h1>
+<p class="sourd">L'état vit sur le disque (<code>taches/&lt;nom&gt;.progres.json</code>). Rafraîchissez la page pendant le travail : rien n'est perdu. « Annuler » pose un drapeau que la tâche consulte à chaque bloc.</p>
+<div style="display:flex;gap:12px;align-items:end;flex-wrap:wrap">
+  <div><label>Nom de la tâche</label><input id="nom" value="essai"></div>
+  <div><label>Blocs</label><input id="blocs" type="number" min="1" value="20"></div>
+  <div><label>Durée d'un bloc (s)</label><input id="duree" type="number" min="0" step="0.1" value="0.5"></div>
+  <div><button class="principal" id="lancer" onclick="lancer()">▶ Lancer</button><button id="annuler" onclick="annuler()" disabled>■ Annuler</button></div>
+</div>
+<div id="suivi">
+  <div class="barre"><div id="remplissage"></div></div>
+  <div class="etat" id="etat">aucune tâche suivie</div>
+</div>
+<h3 style="font-size:14px;color:#9aa3b2;margin-top:22px">Tâches connues sur le disque</h3>
+<ul id="liste"></ul>
+<script>
+// La page est servie par le hub sous /pages/<brique>/ ; les API de tâches sont sous /taches/<brique>/…
+const BRIQUE = location.pathname.split("/")[2];
+const api = (u, o) => fetch(u, o).then(r => r.json());
+let suivi = localStorage.getItem("tache-suivie") || null;   // seul « confort » gardé dans l'onglet : quelle tâche regarder
+
+async function lancer() {
+  const nom = document.getElementById("nom").value.trim();
+  const r = await api(`/api/lancer-tache/${BRIQUE}/travailler`, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nom, blocs: parseInt(document.getElementById("blocs").value, 10), duree_bloc_s: parseFloat(document.getElementById("duree").value) }) });
+  if (r.erreur) { document.getElementById("etat").textContent = r.erreur.cause + "\n" + (r.erreur.remede || ""); return; }
+  suivi = nom; localStorage.setItem("tache-suivie", nom);
+}
+async function annuler() { if (suivi) await api(`/taches/${BRIQUE}/${suivi}/annuler`, { method: "POST" }); }
+
+async function rafraichir() {
+  const liste = await api(`/taches/${BRIQUE}/`);
+  document.getElementById("liste").replaceChildren(...liste.map(t => { const li = document.createElement("li"); li.textContent = `${t.tache} — ${t.etat} ${t.pourcentage}% ${t.etape || ""}`; li.style.cursor = "pointer"; li.onclick = () => { suivi = t.tache; localStorage.setItem("tache-suivie", suivi); }; return li; }));
+  if (!suivi) return;
+  const t = await api(`/taches/${BRIQUE}/${suivi}`);
+  const bloc = document.getElementById("suivi"); bloc.className = t.etat;
+  document.getElementById("remplissage").style.width = `${t.pourcentage}%`;
+  document.getElementById("etat").textContent = `${t.tache} : ${t.etat} — ${t.pourcentage}% — ${t.etape || ""}` + (t.eta_s !== undefined && t.etat === "en_cours" ? ` — reste ≈ ${Math.round(t.eta_s)} s` : "") + (t.resultat ? `\nrésultat : ${t.resultat}` : "") + (t.erreur ? `\nerreur : ${t.erreur}` : "");
+  document.getElementById("annuler").disabled = t.etat !== "en_cours";
+  document.getElementById("lancer").disabled = t.etat === "en_cours";
+}
+rafraichir(); setInterval(rafraichir, 1000);
+</script>
+</body>
+</html>

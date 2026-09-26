@@ -38,6 +38,7 @@ from .. import registre, schemas
 from ..mcp.client import ClientMCP
 from ..utils.erreurs import ErreurForge
 from ..utils.fichiers import ecrire_json, lire_json
+from ..utils import taches as mod_taches
 from . import planificateur as mod_planificateur
 
 DOSSIER_STATIQUE = Path(__file__).resolve().parent / "statique"
@@ -247,6 +248,11 @@ class Requete(BaseHTTPRequestHandler):
                     if v.get("nom") == parties[2]:
                         return self._json(v)
                 raise ErreurForge(f"vue « {parties[2]} » inconnue", "créez-la depuis l'accueil")
+            if parties[:1] == ["taches"] and len(parties) in (2, 3):
+                m = registre.trouver_brique(parties[1])
+                if len(parties) == 2:
+                    return self._json(mod_taches.lister_taches(m.dossier_taches))
+                return self._json(mod_taches.lire_etat(m.dossier_taches, parties[2]))
             if parties[:1] == ["rapports"] and len(parties) >= 2:
                 m = registre.trouver_brique(parties[1])
                 if len(parties) == 2:
@@ -274,6 +280,16 @@ class Requete(BaseHTTPRequestHandler):
                     raise ErreurForge(f"cible invalide : {cible}", "forme attendue : pipeline:<nom> ou brique:<nom>")
                 ajoute = PLANIFICATEUR.demander(cible)
                 return self._json({"mise_en_file": ajoute, "message": "mise en file" if ajoute else "déjà en file ou en cours (verrou anti-doublon)"})
+            if parties[:1] == ["taches"] and len(parties) == 4 and parties[3] == "annuler":
+                m = registre.trouver_brique(parties[1])
+                drapeau = mod_taches.poser_annulation(m.dossier_taches, parties[2])
+                return self._json({"ok": True, "drapeau": str(drapeau), "message": "drapeau posé ; la tâche s'arrête à la fin du bloc en cours"})
+            if parties[:2] == ["api", "lancer-tache"] and len(parties) == 4:
+                m = registre.trouver_brique(parties[2])
+                service = m.service(parties[3])
+                entree = self._corps_json()
+                _lancer_en_arriere_plan(m, service.nom, entree)
+                return self._json({"ok": True, "message": f"{m.nom}.{service.nom} lancé en arrière-plan ; suivez taches/<nom>.progres.json"})
             if parties[:2] == ["api", "appeler"] and len(parties) == 4:
                 m = registre.trouver_brique(parties[2])
                 service = m.service(parties[3])
@@ -310,6 +326,22 @@ class Requete(BaseHTTPRequestHandler):
             self._json({"erreur": {"cause": f"route inconnue : {chemin}", "remede": ""}}, 404)
         except ErreurForge as exc:
             self._erreur(exc)
+
+
+def _lancer_en_arriere_plan(m: mod_manifeste.Manifeste, service: str, entree: dict) -> None:
+    """Un service long (contrat tache/progres@1) : l'appel MCP bloque, on le met dans un fil ; la page suit le disque."""
+
+    def executer():
+        try:
+            with ClientMCP(m.commande_serveur(), m.dossier, delai_s=24 * 3600) as client:
+                client.appeler(service, entree)
+        except ErreurForge as exc:
+            nom = entree.get("nom")
+            if nom:
+                mod_taches.Tache(m.dossier_taches, str(nom)).echouer(exc.texte())
+            sys.stderr.write(f"tâche {m.nom}.{service} : {exc.texte()}\n")
+
+    threading.Thread(target=executer, name=f"tache-{m.nom}-{service}", daemon=True).start()
 
 
 def _pipeline_depuis_json(brut: dict) -> mod_manifeste.Manifeste:

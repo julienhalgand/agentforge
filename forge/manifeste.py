@@ -89,6 +89,7 @@ SCHEMA_MANIFESTE = {
         "planification": "forge://planification/planification@1",
         "page": {"type": "string"},
         "rapports": {"type": "string"},
+        "taches": {"type": "string"},
         "modele": {
             "type": "object",
             "required": ["backend", "nom"],
@@ -217,6 +218,10 @@ class Manifeste:
     @property
     def dossier_rapports(self) -> Path:
         return self.dossier / self.brut.get("rapports", "rapports")
+
+    @property
+    def dossier_taches(self) -> Path:
+        return self.dossier / self.brut.get("taches", "taches")
 
     @property
     def modele(self) -> dict | None:

@@ -225,3 +225,5 @@ briques/*/rapports/
 *.erreur.txt
 *.annuler
 .env.local
+
+briques/*/taches/

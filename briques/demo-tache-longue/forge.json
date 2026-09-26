@@ -1,0 +1,31 @@
+{
+  "forge": 1,
+  "type": "application",
+  "nom": "demo-tache-longue",
+  "version": "0.1.0",
+  "description": "Démonstration du pattern tâche longue : progrès écrit sur le disque, annulation coopérative par drapeau, page interactive qui survit au rafraîchissement. Modèle pour voix-agent, ocr-agent, video-agent.",
+  "icone": "⏳",
+  "interpreteur": "python",
+  "transport": { "type": "mcp-stdio", "commande": ["-m", "demo_tache_longue.serveur"] },
+  "page": "page/index.html",
+  "taches": "taches",
+  "services": [
+    {
+      "nom": "travailler",
+      "description": "Simule un travail en N blocs (ex. N pages à traiter). Écrit <nom>.progres.json à chaque bloc, s'arrête proprement si <nom>.annuler apparaît, produit <nom>.resultat.json.",
+      "duree_longue": true,
+      "entree": {
+        "type": "object",
+        "required": ["nom", "blocs"],
+        "properties": {
+          "nom": { "type": "string", "pattern": "^[a-zA-Z0-9_-]+$", "description": "Identifiant de la tâche (nom des fichiers)" },
+          "blocs": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Nombre de blocs à traiter" },
+          "duree_bloc_s": { "type": "number", "minimum": 0, "default": 0.5, "description": "Durée simulée d'un bloc, en secondes" }
+        }
+      },
+      "sortie": "forge://tache/progres@1",
+      "exemple": { "nom": "essai", "blocs": 20, "duree_bloc_s": 0.5 }
+    }
+  ],
+  "planification": { "mode": "jamais" }
+}
