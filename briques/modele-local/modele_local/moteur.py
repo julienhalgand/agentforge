@@ -35,7 +35,7 @@ DOSSIER_MODELES = DOSSIER / "modeles"
 FICHIER_MOTEUR = DOSSIER_MOTEUR / "moteur.json"
 FICHIER_SERVEUR = DOSSIER_MOTEUR / "serveur.json"
 FICHIER_JOURNAL = DOSSIER_MOTEUR / "llama-server.log"
-API_VERSIONS = os.environ.get("FORGE_LLAMA_RELEASES", "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest")
+API_VERSIONS = os.environ.get("FORGE_LLAMA_RELEASES", "https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30")
 PORT_PAR_DEFAUT = 8791
 
 # Modèles proposés : fichiers GGUF quantifiés Q4_K_M (bon compromis taille/qualité), dépôts publics sans compte.
@@ -146,11 +146,31 @@ def installer_moteur(gpu: bool, progres=None, annulee=None) -> dict:
     try:
         requete = urllib.request.Request(API_VERSIONS, headers={"User-Agent": "agentforge/0.1", "Accept": "application/vnd.github+json"})
         with urllib.request.urlopen(requete, timeout=30, context=contexte_ssl()) as r:
-            version = json.loads(r.read().decode("utf-8"))
+            versions = json.loads(r.read().decode("utf-8"))
     except urllib.error.URLError as exc:
         raise ErreurForge(f"impossible de joindre {API_VERSIONS} ({getattr(exc, 'reason', exc)})", "vérifiez la connexion internet ; le moteur se télécharge une seule fois") from exc
-    assets = {a["name"]: a["browser_download_url"] for a in version.get("assets", [])}
-    nom = choisir_asset(list(assets), gpu)
+    if isinstance(versions, dict):
+        versions = [versions]
+    # La version marquée « latest » peut être une balise nocturne sans binaires (un seul nightly-tag.txt) :
+    # on parcourt les versions récentes et on prend la première qui a une archive pour cette plateforme.
+    version, nom, assets = None, None, {}
+    vues: list[str] = []
+    for candidate in versions:
+        if candidate.get("draft"):
+            continue
+        assets = {a["name"]: a["browser_download_url"] for a in candidate.get("assets", [])}
+        vues.extend(assets)
+        try:
+            nom = choisir_asset(list(assets), gpu)
+            version = candidate
+            break
+        except ErreurForge:
+            continue
+    if version is None or nom is None:
+        raise ErreurForge(
+            f"aucune archive llama.cpp pour {'/'.join(plateforme())} (gpu={gpu}) dans les {len(versions)} dernières versions",
+            "vérifiez https://github.com/ggml-org/llama.cpp/releases ; assets vus : " + ", ".join(sorted(set(vues))[:15]),
+        )
     archive = DOSSIER_MOTEUR / nom
     if not archive.exists():
         resultat = telecharger(assets[nom], archive, progres=lambda p, e: progres and progres(p * 0.9, f"téléchargement du moteur — {e}"), annulee=annulee)

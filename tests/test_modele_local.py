@@ -76,7 +76,10 @@ class _FauxDepots(BaseHTTPRequestHandler):
         base = f"http://127.0.0.1:{_FauxDepots.port}"
         if self.path == "/releases/latest":
             noms = ["llama-b9999-bin-win-cpu-x64.zip", "llama-b9999-bin-win-vulkan-x64.zip", "llama-b9999-bin-ubuntu-x64.zip", "llama-b9999-bin-ubuntu-vulkan-x64.zip", "llama-b9999-bin-macos-arm64.zip", "llama-b9999-bin-macos-x64.zip", "cudart-llama-bin-win-cuda-12.4-x64.zip"]
-            return self._envoyer(200, json.dumps({"tag_name": "b9999", "assets": [{"name": n, "browser_download_url": f"{base}/archive/{n}"} for n in noms]}).encode())
+            # comme sur GitHub : la première version listée est une balise nocturne sans binaires
+            nocturne = {"tag_name": "nightly", "assets": [{"name": "nightly-tag.txt", "browser_download_url": f"{base}/archive/nightly-tag.txt"}]}
+            vraie = {"tag_name": "b9999", "assets": [{"name": n, "browser_download_url": f"{base}/archive/{n}"} for n in noms]}
+            return self._envoyer(200, json.dumps([nocturne, vraie]).encode())
         if self.path.startswith("/archive/"):
             tampon = io.BytesIO()
             with zipfile.ZipFile(tampon, "w") as z:
