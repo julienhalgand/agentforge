@@ -1,0 +1,8 @@
+{
+  "nom": "prix-agent",
+  "protocole": "python -m agent.<service> [--cle valeur …] → un JSON sur stdout ; codes 0 succès, 1 échec, 2 partiel",
+  "services": {
+    "prix": { "module": "agent.prix", "description": "prix comptant USD, Binance puis CoinGecko" },
+    "historique": { "module": "agent.historique", "description": "bougies OHLCV" }
+  }
+}

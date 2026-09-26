@@ -1,0 +1,23 @@
+{
+  "forge": 1,
+  "type": "pipeline",
+  "nom": "rapport-btc-quotidien",
+  "version": "0.1.0",
+  "description": "Bougies journalières du bitcoin (prix-agent) → rapport de marché (rapport-marche).",
+  "icone": "🔗",
+  "planification": { "mode": "quotidien", "heure": "08:15", "rattrapage": true },
+  "etapes": [
+    {
+      "id": "prix",
+      "brique": "prix-agent",
+      "service": "historique",
+      "entree": { "actif": "BTC", "intervalle": "1d", "limite": 90 }
+    },
+    {
+      "id": "rapport",
+      "brique": "rapport-marche",
+      "service": "generer",
+      "entree": { "donnees": "$prix", "titre": "Bitcoin — 90 jours", "seuil_attention_pct": 5, "seuil_repli_pct": 20 }
+    }
+  ]
+}

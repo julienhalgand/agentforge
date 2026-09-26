@@ -1,0 +1,45 @@
+{
+  "forge": 1,
+  "type": "application",
+  "nom": "prix-agent",
+  "version": "0.1.0",
+  "description": "Prix comptant USD (Binance puis CoinGecko en secours) et bougies OHLCV. Brique modèle : protocole « python -m agent.<service> » exposée en MCP par l'adaptateur.",
+  "icone": "📈",
+  "interpreteur": "python",
+  "transport": { "type": "services-json", "fichier": "services.json", "passage_entree": "arguments" },
+  "services": [
+    {
+      "nom": "prix",
+      "description": "Prix comptant d'un ou plusieurs actifs. Binance d'abord, CoinGecko en secours, manques listés actif par actif.",
+      "entree": {
+        "type": "object",
+        "required": ["actifs"],
+        "properties": {
+          "actifs": { "type": "array", "items": { "type": "string" }, "minItems": 1, "description": "Ex. [\"BTC\", \"ETH\"]" },
+          "devise": { "type": "string", "enum": ["USD"], "default": "USD" },
+          "source": { "type": "string", "enum": ["auto", "binance", "coingecko", "test"], "default": "auto" }
+        }
+      },
+      "sortie": "forge://marche/prix-comptant@1",
+      "exemple": { "actifs": ["BTC", "ETH"] }
+    },
+    {
+      "nom": "historique",
+      "description": "Bougies [horodatage_ms, ouverture, plus_haut, plus_bas, cloture, volume] d'un actif.",
+      "entree": {
+        "type": "object",
+        "required": ["actif", "intervalle", "limite"],
+        "properties": {
+          "actif": { "type": "string", "description": "Ex. BTC" },
+          "intervalle": { "type": "string", "enum": ["1m", "5m", "15m", "1h", "4h", "1d", "1w"] },
+          "limite": { "type": "integer", "minimum": 1, "maximum": 1000 },
+          "devise": { "type": "string", "enum": ["USD"], "default": "USD" },
+          "source": { "type": "string", "enum": ["auto", "binance", "coingecko", "test"], "default": "auto" }
+        }
+      },
+      "sortie": "forge://serie-temporelle/ohlcv@1",
+      "exemple": { "actif": "BTC", "intervalle": "1d", "limite": 90 }
+    }
+  ],
+  "planification": { "mode": "jamais" }
+}

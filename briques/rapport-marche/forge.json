@@ -1,0 +1,30 @@
+{
+  "forge": 1,
+  "type": "agent",
+  "nom": "rapport-marche",
+  "version": "0.1.0",
+  "description": "Rapport quotidien de marché à partir de bougies OHLCV : variations, moyennes mobiles, volatilité, repli maximal, graphique. Sans LLM : tout est calculé en code, rien n'est inventé.",
+  "icone": "📝",
+  "interpreteur": "python",
+  "transport": { "type": "mcp-stdio", "commande": ["-m", "rapport_marche.serveur"] },
+  "services": [
+    {
+      "nom": "generer",
+      "description": "Génère rapports/rapport_AAAA-MM-JJ.md + .html (mode sombre, graphique SVG) et retourne le rapport avec ses alertes.",
+      "entree": {
+        "type": "object",
+        "required": ["donnees"],
+        "properties": {
+          "donnees": "forge://serie-temporelle/ohlcv@1",
+          "titre": { "type": "string", "description": "Titre du rapport (défaut : « Marché <actif> »)" },
+          "seuil_attention_pct": { "type": "number", "default": 5, "description": "Variation journalière absolue (%) déclenchant une alerte « attention »" },
+          "seuil_repli_pct": { "type": "number", "default": 20, "description": "Repli maximal (%) déclenchant une alerte « critique »" }
+        }
+      },
+      "sortie": "forge://document/rapport@1",
+      "exemple": { "titre": "Bitcoin — 90 jours" }
+    }
+  ],
+  "rapports": "rapports",
+  "planification": { "mode": "jamais" }
+}
