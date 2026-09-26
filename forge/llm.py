@@ -67,6 +67,38 @@ class ModeleLocal:
         except ErreurForge as exc:
             return False, exc.cause
 
+    def modeles(self) -> list[str]:
+        """Modèles installés sur le serveur local."""
+        if self.backend == "ollama":
+            return [m.get("name", "") for m in self._get("/api/tags").get("models", [])]
+        return [m.get("id", "") for m in self._get("/v1/models").get("data", [])]
+
+    def installer(self, nom: str, progres=None, annulee=None) -> None:
+        """Télécharge un modèle (Ollama : /api/pull en flux). `progres(pourcentage, etape)` et `annulee()` optionnels."""
+        if self.backend != "ollama":
+            raise ErreurForge("le téléchargement de modèle n'existe que pour Ollama", "installez le modèle avec l'outil de votre serveur")
+        corps = json.dumps({"model": nom, "stream": True}).encode("utf-8")
+        requete = urllib.request.Request(self.url + "/api/pull", data=corps, method="POST", headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(requete, timeout=self.delai_s) as reponse:
+                for ligne in reponse:
+                    if annulee and annulee():
+                        return  # fermer la connexion suffit : Ollama arrête le téléchargement, les couches déjà reçues sont gardées
+                    try:
+                        d = json.loads(ligne.decode("utf-8"))
+                    except json.JSONDecodeError:
+                        continue
+                    if "error" in d:
+                        raise ErreurForge(f"Ollama : {d['error']}", f"vérifiez le nom du modèle sur https://ollama.com/library (reçu : {nom})")
+                    total, fait = d.get("total"), d.get("completed")
+                    if progres:
+                        pct = (100.0 * fait / total) if total and fait is not None else (100.0 if d.get("status") == "success" else 0.0)
+                        progres(pct, d.get("status", ""))
+        except urllib.error.HTTPError as exc:
+            raise ErreurForge(f"Ollama : HTTP {exc.code} sur /api/pull", "vérifiez le nom du modèle", [exc.read().decode("utf-8", errors="replace")[:300]]) from exc
+        except urllib.error.URLError as exc:
+            raise ErreurForge(f"Ollama injoignable sur {self.url} ({exc.reason})", "installez Ollama (https://ollama.com/download) et lancez-le") from exc
+
     def generer(self, prompt: str, systeme: str = "", temperature: float = 0.0, max_tokens: int | None = None) -> str:
         """Texte libre, avec continuation automatique si la réponse est coupée."""
         messages = ([{"role": "system", "content": systeme}] if systeme else []) + [{"role": "user", "content": prompt}]
@@ -85,6 +117,7 @@ class ModeleLocal:
                 f"réponse toujours coupée après {continuations} continuations ({len(texte)} caractères)",
                 "augmentez max_tokens ou découpez la tâche ; rien n'a été tronqué en silence, voici le début : " + texte[:200],
             )
+        self.dernieres_continuations = continuations
         return texte
 
     def generer_json(self, prompt: str, schema: Any, systeme: str = "", temperature: float = 0.0, max_tokens: int | None = None) -> Any:

@@ -1,0 +1,81 @@
+{
+  "forge": 1,
+  "type": "application",
+  "nom": "modele-local",
+  "version": "0.1.0",
+  "description": "Modèle de langage local (Ollama, CPU ou GPU) exposé comme une brique : choisir et télécharger un modèle depuis la page, générer du texte ou du JSON sous schéma, brancher dans un pipeline. Zéro cloud, zéro clé.",
+  "icone": "🧠",
+  "interpreteur": "python",
+  "transport": { "type": "mcp-stdio", "commande": ["-m", "modele_local.serveur"] },
+  "page": "page/index.html",
+  "taches": "taches",
+  "modele": { "backend": "ollama", "nom": "qwen2.5:3b", "url": "http://localhost:11434", "gpu": true, "cpu_ok": true },
+  "services": [
+    {
+      "nom": "etat",
+      "description": "Le serveur de modèles répond-il ? Quels modèles sont installés ? Lequel est actif ?",
+      "entree": { "type": "object", "properties": {} },
+      "sortie": {
+        "type": "object",
+        "required": ["backend", "url", "joignable", "modeles", "modele_actif", "pret"],
+        "properties": {
+          "backend": { "type": "string" }, "url": { "type": "string" }, "joignable": { "type": "boolean" },
+          "modeles": { "type": "array", "items": { "type": "string" } }, "modele_actif": { "type": "string" },
+          "pret": { "type": "boolean" }, "explication": { "type": "string" }, "gpu": { "type": "boolean" }
+        }
+      },
+      "exemple": {}
+    },
+    {
+      "nom": "choisir_modele",
+      "description": "Rend un modèle installé actif pour les prochaines générations (mémorisé dans modele.json).",
+      "entree": { "type": "object", "required": ["nom"], "properties": { "nom": { "type": "string" }, "gpu": { "type": "boolean" } } },
+      "sortie": { "type": "object", "required": ["modele_actif"], "properties": { "modele_actif": { "type": "string" }, "gpu": { "type": "boolean" } } },
+      "exemple": { "nom": "qwen2.5:3b" }
+    },
+    {
+      "nom": "installer_modele",
+      "description": "Télécharge un modèle depuis la bibliothèque Ollama (tâche longue : progrès dans taches/<nom>.progres.json, annulable).",
+      "duree_longue": true,
+      "entree": { "type": "object", "required": ["nom"], "properties": { "nom": { "type": "string", "description": "ex. qwen2.5:3b, llama3.2:3b, mistral:7b" } } },
+      "sortie": "forge://tache/progres@1",
+      "exemple": { "nom": "qwen2.5:3b" }
+    },
+    {
+      "nom": "generer",
+      "description": "Rédige un texte à partir d'une consigne et de faits fournis (ancré : les chiffres sont recopiés, jamais inventés). Continuation automatique si la réponse est coupée.",
+      "entree": {
+        "type": "object",
+        "required": ["consigne"],
+        "properties": {
+          "consigne": { "type": "string", "description": "Ce que le modèle doit faire, en français" },
+          "faits": { "type": "object", "description": "Données à utiliser (ex. le rapport d'une autre brique) — branchez ici la sortie d'une étape" },
+          "systeme": { "type": "string", "description": "Rôle / règles (défaut : rédacteur ancré, français, chiffres tels quels)" },
+          "modele": { "type": "string", "description": "Nom d'un modèle installé (défaut : le modèle actif)" },
+          "max_tokens": { "type": "integer", "minimum": 16 },
+          "temperature": { "type": "number", "minimum": 0, "maximum": 2 }
+        }
+      },
+      "sortie": "forge://texte/generation@1",
+      "exemple": { "consigne": "Explique en trois phrases ce qu'est une moyenne mobile, pour un débutant." }
+    },
+    {
+      "nom": "generer_json",
+      "description": "Extraction sous grammaire : la sortie est contrainte à un JSON Schema et validée (tri, classement, extraction de champs).",
+      "entree": {
+        "type": "object",
+        "required": ["consigne", "schema"],
+        "properties": {
+          "consigne": { "type": "string" },
+          "schema": { "type": "object", "description": "JSON Schema de la sortie attendue" },
+          "faits": { "type": "object" },
+          "systeme": { "type": "string" },
+          "modele": { "type": "string" }
+        }
+      },
+      "sortie": { "type": "object", "required": ["valeur", "modele"], "properties": { "valeur": {}, "modele": { "type": "string" }, "backend": { "type": "string" } } },
+      "exemple": { "consigne": "Classe ce message : « votre colis est livré » en important ou ignorable.", "schema": { "type": "object", "required": ["classe"], "properties": { "classe": { "type": "string", "enum": ["important", "ignorable"] } } } }
+    }
+  ],
+  "planification": { "mode": "jamais" }
+}

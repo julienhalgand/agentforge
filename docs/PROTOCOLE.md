@@ -154,6 +154,12 @@ manifeste d'un agent déclare `"modele": { "backend": "ollama", "nom": "qwen2.5:
   (Ollama : `format`) et la valide avant de la rendre ;
 - `disponible()` dit si le serveur répond et si le modèle est tiré (`ollama pull …` sinon).
 
+**Le modèle est une brique** : `briques/modele-local` expose `etat`, `choisir_modele`,
+`installer_modele` (tâche longue, annulable), `generer` (`consigne` + `faits` → `forge://texte/generation@1`)
+et `generer_json`. Sa page permet à un non-développeur d'installer un modèle, d'en choisir un et de
+l'essayer. Dans un pipeline, on branche la sortie d'une étape sur `faits` : le modèle ne voit que ce
+qu'on lui donne.
+
 ## 7. Les erreurs
 
 Chaque échec dit **la cause et le remède**, élément par élément :

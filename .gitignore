@@ -227,3 +227,4 @@ briques/*/rapports/
 .env.local
 
 briques/*/taches/
+briques/*/modele.json

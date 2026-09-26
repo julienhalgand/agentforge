@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "forge://texte/generation@1",
+  "title": "Texte généré par un modèle local",
+  "description": "Résultat d'une génération : le texte, le modèle utilisé, et le nombre de continuations qu'il a fallu pour ne rien tronquer.",
+  "type": "object",
+  "required": ["texte", "modele", "backend"],
+  "properties": {
+    "texte": { "type": "string" },
+    "modele": { "type": "string" },
+    "backend": { "type": "string" },
+    "continuations": { "type": "integer" },
+    "duree_s": { "type": "number" },
+    "manques": { "type": "array", "items": { "type": "string" } }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "forge": 1,
+  "type": "pipeline",
+  "nom": "rapport-btc-commente",
+  "version": "0.1.0",
+  "description": "Bougies du bitcoin → rapport calculé en code → commentaire rédigé par le modèle local à partir des mesures (chiffres recopiés, jamais inventés).",
+  "icone": "🧠",
+  "planification": { "mode": "jamais" },
+  "etapes": [
+    { "id": "prix", "brique": "prix-agent", "service": "historique", "entree": { "actif": "BTC", "intervalle": "1d", "limite": 90 } },
+    { "id": "rapport", "brique": "rapport-marche", "service": "generer", "entree": { "donnees": "$prix", "titre": "Bitcoin — 90 jours" } },
+    { "id": "commentaire", "brique": "modele-local", "service": "generer",
+      "entree": { "faits": "$rapport", "consigne": "En cinq phrases maximum, commente ce rapport de marché pour un lecteur non spécialiste. Reprends les chiffres du résumé et des alertes tels quels, sans en ajouter." } }
+  ]
+}
