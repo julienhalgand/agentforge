@@ -42,7 +42,8 @@ Sans accès à Binance/CoinGecko (ou pour un essai hors ligne) : `PRIX_AGENT_SOU
 Page **Créer** du hub : « me donner la météo de Nantes pour 3 jours » → le modèle local remplit un
 gabarit de brique (JSON contraint, une fonction Python par service), agentforge vérifie (manifeste,
 contrats, syntaxe, imports limités à la bibliothèque standard), **l'exécute pour de vrai** sur son
-exemple, renvoie chaque échec au modèle (3 tours max) et l'installe : une tuile de plus sur l'accueil.
+exemple — ou, pour une application, **l'ouvre dans un navigateur sans fenêtre et clique sur chaque bouton** —,
+renvoie chaque échec au modèle jusqu'à ce que ça marche, et l'installe : une tuile de plus sur l'accueil.
 « chaque matin, le prix du bitcoin et un rapport commenté » → un pipeline vérifié, planifié, ouvert
 dans l'assembleur. Une brique cassée n'est jamais installée en silence.
 

@@ -200,3 +200,23 @@ def test_ameliorer_une_brique_page(dossier_utilisateur):
     m = registre.trouver_brique("metronome")
     assert "<button>Son</button>" in m.page.read_text(encoding="utf-8")
     assert list((m.dossier / "page" / ".sauvegardes").glob("index.html.*"))  # l'ancienne page est gardée
+
+
+def test_la_page_est_essayee_dans_le_navigateur_avant_installation(dossier_utilisateur):
+    """Bouton sans gestionnaire → refusé, l'échec exact est renvoyé au modèle ; page corrigée → installée."""
+    from forge import verification_page
+    if not verification_page.trouver_navigateur():
+        pytest.skip("aucun navigateur")
+    morte = "<!doctype html><html lang='fr'><head><meta charset='utf-8'></head><body><button id='demarrer'>Démarrer</button><script>function go(){}</script></body></html>"
+    vivante = "<!doctype html><html lang='fr'><head><meta charset='utf-8'></head><body><button onclick='go()'>Démarrer</button><p id='s'></p><script>function go(){document.getElementById('s').textContent='tic';}</script></body></html>"
+    reponses = iter([morte, vivante]); demandes = []
+
+    def modele(consigne, schema, systeme):
+        demandes.append(consigne)
+        return {"nom": "metronome", "description": "m", "icone": "🎵", "page": next(reponses)}
+
+    journal = []
+    r = creation.creer_brique("je veux un métronome", modele, journal=journal.append, genre="page")
+    assert r["tours"] == 2 and "clic-sans-effet" in demandes[1] and "Démarrer" in demandes[1]
+    assert any("aucune erreur, chaque bouton fait quelque chose" in l for l in journal)
+    assert "tic" in registre.trouver_brique("metronome").page.read_text(encoding="utf-8")

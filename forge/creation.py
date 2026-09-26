@@ -27,6 +27,7 @@ from typing import Any, Callable
 from . import manifeste as mod_manifeste
 from . import pipeline as mod_pipeline
 from . import registre, schemas
+from . import verification_page
 from .mcp.client import ClientMCP
 from .utils.erreurs import ErreurForge
 from .utils.fichiers import ecrire_json, mettre_a_la_corbeille
@@ -269,6 +270,23 @@ def _catalogue_contrats() -> str:
     return "\n".join(lignes)
 
 
+def _essai_page(m: mod_manifeste.Manifeste, journal=None) -> list[str]:
+    """Ouvre la page dans un navigateur sans fenêtre, clique sur chaque bouton ; rend les échecs (vide = ça marche)."""
+    journal = journal or (lambda _m: None)
+    if not m.page or not m.page.exists():
+        return []
+    journal("essai de la page dans le navigateur : chargement, puis clic sur chaque bouton")
+    bilan = verification_page.essayer_page(m.page)
+    if not bilan.get("essaye"):
+        journal("essai de la page sauté : " + bilan.get("raison", "?"))
+        return []
+    echecs = verification_page.resume_essai(bilan)
+    journal(f"page essayée : {bilan.get('clics', 0)} clic(s) sur {', '.join(bilan.get('boutons', [])) or 'aucun bouton'} — " + (f"{len(echecs)} problème(s)" if echecs else "aucune erreur, chaque bouton fait quelque chose"))
+    for a in bilan.get("avertissements", []):
+        journal("  avertissement : " + a)
+    return echecs
+
+
 def _essai(m: mod_manifeste.Manifeste, journal=None) -> list[str]:
     """Appelle chaque service sur son exemple ; rend la liste des échecs (vide = tout va bien)."""
     journal = journal or (lambda _m: None)
@@ -332,8 +350,8 @@ def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: in
             journal("vérification du code (syntaxe, imports autorisés, contrats)")
             m = gabarit(spec, phrase, temporaire)
             journal(f"brique écrite ; essai réel de {len(m.services)} service(s)" if m.services else "brique écrite (page seule, pas de service à essayer)")
-            echecs = _essai(m, journal)
-            if echecs and spec.get("page"):
+            echecs = _essai(m, journal) + _essai_page(m, journal)
+            if echecs and spec.get("page") and m.services:
                 # Un outil interactif vaut par sa page : on retire les services qui échouent et on garde la page.
                 rates = {e.split(" ", 2)[1] for e in echecs if e.startswith("service ")}
                 gardes = [sv for sv in spec["services"] if sv["nom"] not in rates]
@@ -344,7 +362,7 @@ def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: in
                 shutil.rmtree(temporaire, ignore_errors=True)
                 temporaire.mkdir()
                 m = gabarit(spec, phrase, temporaire)
-                echecs = _essai(m, journal)
+                echecs = _essai(m, journal) + _essai_page(m, journal)
             if echecs:
                 dernier_probleme = "\n".join(echecs)
                 for e in echecs[:3]:
@@ -571,7 +589,7 @@ def ameliorer_brique(nom: str, remarque: str, generer_json: GenererJSON, journal
         try:
             journal("vérification de la nouvelle version")
             nouveau = gabarit(proposition, phrase, temporaire)
-            echecs = _essai(nouveau, journal)
+            echecs = _essai(nouveau, journal) + _essai_page(nouveau, journal)
             if echecs:
                 dernier_probleme = "\n".join(echecs)
                 for e in echecs[:3]:

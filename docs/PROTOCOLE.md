@@ -177,8 +177,13 @@ génère manifeste, module et serveur MCP. Validation sans exécuter (`valider_c
 dans `IMPORTS_AUTORISES`, pas d'`exec`/`eval`/`open`), puis **essai réel** de chaque service sur son
 exemple via le client MCP avec validation de la sortie par le contrat ; chaque échec repart au modèle
 en clair, 3 tours au plus ; installation dans `~/.agentforge/briques/<nom>` (l'ancienne va à la
-corbeille). `composer_pipeline` : catalogue des briques → pipeline sous `SCHEMA_PIPELINE`, vérifié
-par `pipeline.verifier`, 2 tours. Routes du hub : `POST /api/creer-brique` (tâche longue,
+corbeille). Une brique de genre « page » (application interactive) est **essayée dans un navigateur sans
+fenêtre** avant installation (`forge/verification_page.py` : Edge, Chrome ou Chromium déjà présent,
+mode headless + `--dump-dom`, une sonde placée avant tout script relève les erreurs au chargement, chaque
+bouton est cliqué et un clic sans aucun effet — ni changement de page, ni minuterie, ni son — est un
+échec) ; les échecs repartent au modèle. `ameliorer_brique` fait de même à partir d'une remarque de
+l'utilisateur et des erreurs observées dans la page par le hub (sonde `sonde.js`). `composer_pipeline` :
+catalogue des briques → pipeline sous `SCHEMA_PIPELINE`, vérifié par `pipeline.verifier`. Routes du hub : `POST /api/creer-brique` (tâche longue,
 `GET /api/creations/<id>`), `POST /api/composer`. Page : `/creer`.
 
 ## 7. Les erreurs
