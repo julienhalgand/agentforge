@@ -386,10 +386,12 @@ def _creer_brique_en_tache(identifiant: str, phrase: str) -> None:
     etapes = []
 
     def journal(message: str) -> None:
-        etapes.append(message)
-        tache.progres(min(90, 15 * len(etapes)), message, force=True)
+        etapes.append(f"{time.strftime('%H:%M:%S')} {message}")
+        tache.progres(min(90, 8 * len(etapes)), message, force=True)
+        ecrire_json(DOSSIER_CREATIONS / f"{identifiant}.journal.json", etapes, sauvegarder=False)
 
     try:
+        journal(f"demande : « {phrase} »")
         resultat = mod_creation.creer_brique(phrase, _generer_json_modele, journal=journal)
         etat = tache.terminer(resultat["dossier"], etape=f"brique « {resultat['nom']} » créée et testée")
         ecrire_json(DOSSIER_CREATIONS / f"{identifiant}.resultat.json", {**resultat, "journal": etapes}, sauvegarder=False)

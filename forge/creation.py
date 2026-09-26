@@ -239,13 +239,18 @@ def _catalogue_contrats() -> str:
     return "\n".join(lignes)
 
 
-def _essai(m: mod_manifeste.Manifeste) -> list[str]:
+def _essai(m: mod_manifeste.Manifeste, journal=None) -> list[str]:
     """Appelle chaque service sur son exemple ; rend la liste des échecs (vide = tout va bien)."""
+    journal = journal or (lambda _m: None)
     echecs = []
+    if not m.services:
+        return echecs
     with ClientMCP(m.commande_serveur(), m.dossier, delai_s=120) as client:
         for s in m.services:
             try:
+                journal(f"essai de {s.nom} avec {json.dumps(s.exemple or {}, ensure_ascii=False)[:80]}")
                 resultat = client.appeler(s.nom, s.exemple or {})
+                journal(f"{s.nom} : réponse conforme au contrat")
                 if isinstance(resultat, dict) and resultat.get("manques"):
                     echecs.append(f"service {s.nom} : réponse partielle — " + " ; ".join(resultat["manques"]))
             except ErreurForge as exc:
@@ -264,7 +269,7 @@ def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: in
     dernier_probleme = ""
     spec = None
     for tour in range(1, tours + 1):
-        journal(f"tour {tour}/{tours} : le modèle {'corrige' if dernier_probleme else 'écrit'} la brique")
+        journal(f"tour {tour}/{tours} : le modèle {'corrige' if dernier_probleme else 'écrit'} la brique (nom, services, code) — cette étape est la plus longue")
         demande = consigne if not dernier_probleme else (
             consigne + f"\n\nTa proposition précédente était :\n{json.dumps(spec, ensure_ascii=False)}\n\n"
             f"Elle a échoué :\n{dernier_probleme}\n\nCorrige-la et renvoie la brique complète."
@@ -275,11 +280,13 @@ def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: in
             dernier_probleme = exc.texte()
             journal(f"réponse inutilisable : {exc.cause}")
             continue
+        journal(f"proposition reçue : « {spec.get('nom', '?')} », {len(spec.get('services', []))} service(s)" + (", une page interactive" if spec.get("page") else ""))
         temporaire = Path(tempfile.mkdtemp(prefix="brique-", dir=str(registre.DOSSIER_UTILISATEUR)))
         try:
+            journal("vérification du code (syntaxe, imports autorisés, contrats)")
             m = gabarit(spec, phrase, temporaire)
-            journal(f"brique « {m.nom} » écrite, essai réel de {len(m.services)} service(s)")
-            echecs = _essai(m)
+            journal(f"brique écrite ; essai réel de {len(m.services)} service(s)" if m.services else "brique écrite (page seule, pas de service à essayer)")
+            echecs = _essai(m, journal)
             if echecs:
                 dernier_probleme = "\n".join(echecs)
                 journal("échec à l'essai : " + echecs[0][:160])
