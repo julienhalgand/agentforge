@@ -323,7 +323,10 @@ class Requete(BaseHTTPRequestHandler):
                     identifiant = f"demande-{int(time.time() * 1000)}"
                     DEMANDE_EN_COURS["id"] = identifiant
                     mod_taches.Tache(DOSSIER_CREATIONS, identifiant).demarrer("demande reçue")
-                threading.Thread(target=_demander_en_tache, args=(identifiant, phrase), daemon=True).start()
+                genre = corps.get("genre") or "auto"
+                if genre not in ("auto", "page", "service", "composer"):
+                    raise ErreurForge(f"genre inconnu : {genre}", "page, service, composer ou auto")
+                threading.Thread(target=_demander_en_tache, args=(identifiant, phrase, genre), daemon=True).start()
                 return self._json({"ok": True, "id": identifiant})
             if chemin == "/api/composer":
                 corps = self._corps_json()
@@ -391,7 +394,7 @@ def _generer_json_modele(consigne: str, schema: dict, systeme: str):
         return client.appeler("generer_json", {"consigne": consigne, "schema": schema, "systeme": systeme})["valeur"]
 
 
-def _demander_en_tache(identifiant: str, phrase: str) -> None:
+def _demander_en_tache(identifiant: str, phrase: str, genre: str = "auto") -> None:
     """Toute la demande dans un fil suivi par la page : 1 décision, 2 assemblage ou création, 3 installation."""
     tache = mod_taches.Tache(DOSSIER_CREATIONS, identifiant)
     tache.demarrer("étape 1/3 — je regarde ce que les briques installées savent faire")
@@ -404,9 +407,13 @@ def _demander_en_tache(identifiant: str, phrase: str) -> None:
 
     try:
         journal(f"demande : « {phrase} »")
-        journal("étape 1/3 — le modèle local décide : assembler des briques existantes, ou en créer une (10 s à 1 min ; le moteur démarre au premier appel)")
-        decision = mod_creation.decider(phrase, _generer_json_modele)
-        journal(f"décision : {decision['action']} — {decision['raison']}")
+        if genre == "auto":
+            journal("étape 1/3 — le modèle local décide : assembler des briques existantes, ou en créer une (10 s à 1 min ; le moteur démarre au premier appel)")
+            decision = mod_creation.decider(phrase, _generer_json_modele)
+            journal(f"décision : {decision['action']} — {decision['raison']}")
+        else:
+            decision = {"action": "composer" if genre == "composer" else "creer", "raison": f"choisi par l'utilisateur : {genre}"}
+            journal(f"étape 1/3 — genre choisi : {genre}")
         if decision["action"] == "composer":
             journal("étape 2/3 — assemblage des briques existantes")
             try:
@@ -417,9 +424,11 @@ def _demander_en_tache(identifiant: str, phrase: str) -> None:
                 tache.terminer(str(fichier), etape=f"pipeline « {pipeline['nom']} » prêt")
                 return
             except ErreurForge as exc:
+                if genre == "composer":
+                    raise
                 journal("les briques existantes ne suffisent pas (" + exc.cause + ") : on crée une brique")
-        journal("étape 2/3 — création d'une nouvelle brique (le modèle écrit, agentforge vérifie et essaie ; jusqu'à 3 tours)")
-        resultat = mod_creation.creer_brique(phrase, _generer_json_modele, journal=lambda m: journal("  " + m), annulee=tache.annulee)
+        journal("étape 2/3 — création d'une nouvelle brique (le modèle écrit, agentforge vérifie" + (" et essaie" if genre != "page" else "") + " ; ça recommence jusqu'à réussir)")
+        resultat = mod_creation.creer_brique(phrase, _generer_json_modele, journal=lambda m: journal("  " + m), annulee=tache.annulee, genre=genre if genre in ("page", "service") else "auto")
         journal(f"étape 3/3 — brique « {resultat['nom']} » installée")
         ecrire_json(DOSSIER_CREATIONS / f"{identifiant}.resultat.json", {"action": "creer", **resultat, "journal": etapes}, sauvegarder=False)
         tache.terminer(resultat["dossier"], etape=f"brique « {resultat['nom']} » créée et testée")

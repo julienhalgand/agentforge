@@ -16,6 +16,7 @@ avec un modèle simulé.
 from __future__ import annotations
 
 import ast
+import copy
 import json
 import re
 import shutil
@@ -84,6 +85,31 @@ SCHEMA_BRIQUE = {
         },
     },
 }
+
+# Genre « page » : le modèle ne peut rendre QUE la page. Genre « service » : QUE des services. Rien d'autre n'est possible.
+SCHEMA_PAGE = {
+    "type": "object",
+    "required": ["nom", "description", "icone", "page"],
+    "properties": {
+        "nom": {"type": "string", "pattern": "^[a-z][a-z0-9-]{1,30}$", "description": "nom court en minuscules et tirets, ex. metronome"},
+        "description": {"type": "string"},
+        "icone": {"type": "string", "description": "un seul emoji"},
+        "page": {"type": "string", "description": "page HTML complète et autonome : <!doctype html><html>… avec CSS et JS dans le fichier, sans bibliothèque externe"},
+    },
+}
+
+SYSTEME_PAGE = (
+    "Tu fabriques une application locale pour agentforge sous la forme d'une seule page HTML autonome (HTML, CSS et JavaScript "
+    "dans le même fichier, aucune bibliothèque externe, aucun appel réseau). Jolie et simple : fond clair, gros boutons, lisible sur "
+    "téléphone. Tout en français. Tu réponds uniquement par le JSON demandé."
+)
+
+def _schema_services() -> dict:
+    schema = copy.deepcopy(SCHEMA_BRIQUE)
+    schema["properties"].pop("page", None)
+    schema["properties"]["services"]["minItems"] = 1
+    return schema
+
 
 SYSTEME_BRIQUE = (
     "Tu fabriques des briques pour agentforge, un outil local. Tu réponds uniquement par le JSON demandé. "
@@ -260,18 +286,24 @@ def _essai(m: mod_manifeste.Manifeste, journal=None) -> list[str]:
     return echecs
 
 
-def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: int | None = None, installer: bool = True, annulee=None) -> dict:
+def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: int | None = None, installer: bool = True, annulee=None, genre: str = "auto") -> dict:
     """Une phrase → une brique installée et testée. Sans `tours`, recommence jusqu'à réussir (ou annulation),
     en renvoyant chaque message d'erreur au modèle. Rend {nom, dossier, tours, spec}."""
     import itertools
 
     journal = journal or (lambda _m: None)
     annulee = annulee or (lambda: False)
-    consigne = (
-        f"Décris une brique qui fait ceci : « {phrase} ».\n\n"
-        f"Contrats de sortie existants (préfère-les quand ils correspondent, sinon \"champs\") :\n{_catalogue_contrats()}\n\n"
-        "Donne un exemple d'entrée réaliste pour chaque service : il servira à tester la brique pour de vrai."
-    )
+    if genre == "page":
+        schema, systeme = SCHEMA_PAGE, SYSTEME_PAGE
+        consigne = f"Fais une application qui fait ceci : « {phrase} ». Rends son nom, sa description, une icône et la page HTML complète."
+    else:
+        schema = _schema_services() if genre == "service" else SCHEMA_BRIQUE
+        systeme = SYSTEME_BRIQUE
+        consigne = (
+            f"Décris une brique qui fait ceci : « {phrase} ».\n\n"
+            f"Contrats de sortie existants (préfère-les quand ils correspondent, sinon \"champs\") :\n{_catalogue_contrats()}\n\n"
+            "Donne un exemple d'entrée réaliste pour chaque service : il servira à tester la brique pour de vrai."
+        )
     dernier_probleme = ""
     spec = None
     for tour in (range(1, tours + 1) if tours else itertools.count(1)):
@@ -283,7 +315,9 @@ def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: in
             f"Elle a échoué :\n{dernier_probleme}\n\nCorrige-la et renvoie la brique complète."
         )
         try:
-            spec = generer_json(demande, SCHEMA_BRIQUE, SYSTEME_BRIQUE)
+            spec = generer_json(demande, schema, systeme)
+            if genre == "page":
+                spec = {**spec, "services": []}
         except ErreurForge as exc:
             dernier_probleme = exc.texte()
             journal(f"réponse inutilisable : {exc.cause}")

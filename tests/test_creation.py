@@ -152,3 +152,20 @@ def test_page_conservee_si_les_services_inventes_echouent(dossier_utilisateur):
     m = registre.trouver_brique("metronome")
     assert r["tours"] == 1 and m.page and m.services == []
     assert any("service(s) retiré(s) : tic" in l for l in journal)
+
+
+def test_genre_page_ne_laisse_aucune_place_aux_services(dossier_utilisateur):
+    schemas_recus = []
+
+    def modele(consigne, schema, systeme):
+        schemas_recus.append(schema)
+        return {"nom": "metronome", "description": "Un métronome.", "icone": "🎵", "page": "<!doctype html><html lang='fr'><body><h1>Métronome</h1></body></html>"}
+
+    r = creation.creer_brique("je veux un métronome", modele, genre="page")
+    assert "services" not in schemas_recus[0]["properties"] and "page" in schemas_recus[0]["required"]
+    assert registre.trouver_brique("metronome").page and r["tours"] == 1
+
+
+def test_genre_service_exige_un_service_et_pas_de_page():
+    schema = creation._schema_services()
+    assert "page" not in schema["properties"] and schema["properties"]["services"]["minItems"] == 1
