@@ -139,3 +139,16 @@ def test_decider_et_brique_avec_page(dossier_utilisateur):
     with pytest.raises(ErreurForge) as exc:
         creation.creer_brique("rien", lambda c, s, sy: {**spec, "nom": "vide", "page": "", "services": []}, tours=1)
     assert any("au moins un service ou une page" in d for d in exc.value.details)
+
+
+def test_page_conservee_si_les_services_inventes_echouent(dossier_utilisateur):
+    """Le petit modèle colle des services faux autour d'une page valide : la page est installée, les services retirés."""
+    spec = {"nom": "metronome", "description": "Un métronome.", "icone": "🎵",
+            "page": "<!doctype html><html lang='fr'><body><h1>Métronome</h1></body></html>",
+            "services": [{"nom": "tic", "description": "tic", "entree": [], "sortie": {"contrat": "forge://texte/generation@1"}, "exemple": {},
+                          "code": "def executer(entree):\n    return {'texte': 'tic'}\n"}]}
+    journal = []
+    r = creation.creer_brique("je veux un métronome", lambda c, s, sy: spec, journal=journal.append)
+    m = registre.trouver_brique("metronome")
+    assert r["tours"] == 1 and m.page and m.services == []
+    assert any("service(s) retiré(s) : tic" in l for l in journal)

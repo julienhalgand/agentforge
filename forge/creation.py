@@ -94,7 +94,9 @@ SYSTEME_BRIQUE = (
     "N'invente pas d'API : utilise des services publics sans clé (Open-Meteo, Wikipédia, Binance, CoinGecko, frankfurter.app…). "
     "Tous les noms, descriptions et messages sont en français. "
     "Si la demande est un outil interactif (métronome, minuteur, jeu, bloc-notes…), rends une « page » HTML complète et autonome, "
-    "jolie et simple (fond clair, gros boutons), et une liste de services vide. Sinon, des services et pas de page."
+    "jolie et simple (fond clair, gros boutons), et \"services\": [] — AUCUN service. Sinon, des services et pas de page. "
+    "Un contrat forge://… ne s'utilise que si la sortie a exactement ses champs ; en cas de doute, \"contrat\": \"champs\". "
+    "L'exemple contient TOUS les champs d'entrée obligatoires."
 )
 
 
@@ -290,6 +292,18 @@ def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: in
             m = gabarit(spec, phrase, temporaire)
             journal(f"brique écrite ; essai réel de {len(m.services)} service(s)" if m.services else "brique écrite (page seule, pas de service à essayer)")
             echecs = _essai(m, journal)
+            if echecs and spec.get("page"):
+                # Un outil interactif vaut par sa page : on retire les services qui échouent et on garde la page.
+                rates = {e.split(" ", 2)[1] for e in echecs if e.startswith("service ")}
+                gardes = [sv for sv in spec["services"] if sv["nom"] not in rates]
+                for e in echecs[:3]:
+                    journal("échec à l'essai : " + e[:220])
+                journal(f"la page est conservée ; service(s) retiré(s) : {', '.join(sorted(rates))}" + (f" ; conservé(s) : {', '.join(sv['nom'] for sv in gardes)}" if gardes else ""))
+                spec = {**spec, "services": gardes}
+                shutil.rmtree(temporaire, ignore_errors=True)
+                temporaire.mkdir()
+                m = gabarit(spec, phrase, temporaire)
+                echecs = _essai(m, journal)
             if echecs:
                 dernier_probleme = "\n".join(echecs)
                 for e in echecs[:3]:
