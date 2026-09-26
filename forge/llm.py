@@ -195,6 +195,10 @@ class ModeleLocal:
 
 
 def _extraire_json(texte: str) -> str:
-    """Certains modèles entourent le JSON de ```json … ``` : on l'isole."""
-    m = re.search(r"```(?:json)?\s*(.*?)```", texte, re.S)
-    return m.group(1).strip() if m else texte.strip()
+    """Le texte est le JSON lui-même, sauf s'il est ENTOURÉ de ```json … ``` : on ne touche jamais aux clôtures
+    qui seraient à l'intérieur d'une valeur (une page HTML dans une chaîne, par exemple)."""
+    propre = texte.strip()
+    if propre.startswith("```"):
+        propre = re.sub(r"^```[a-zA-Z]*\s*", "", propre)
+        propre = re.sub(r"\s*```$", "", propre)
+    return propre.strip()

@@ -204,7 +204,7 @@ def gabarit(spec: dict, phrase: str, dossier: Path) -> mod_manifeste.Manifeste:
                 problemes.append(f"service {s['nom']} : {exc.cause}")
         elif not s["sortie"].get("champs"):
             problemes.append(f"service {s['nom']} : sortie « champs » sans aucun champ")
-    page = (spec.get("page") or "").strip()
+    page = nettoyer_page(spec.get("page") or "")
     if page and "<html" not in page.lower():
         problemes.append("la page doit être un document HTML complet (<!doctype html><html>…)")
     if not spec["services"] and not page:
@@ -242,7 +242,7 @@ def gabarit(spec: dict, phrase: str, dossier: Path) -> mod_manifeste.Manifeste:
         "nom": spec["nom"],
         "version": "0.1.0",
         "description": spec["description"],
-        "icone": spec.get("icone", "🧩"),
+        "icone": nettoyer_icone(spec.get("icone", "🧩")),
         "interpreteur": "python",
         "transport": {"type": "mcp-stdio", "commande": ["-m", f"{module}.serveur"]},
         "services": services_manifeste,
@@ -455,6 +455,20 @@ def composer_pipeline(phrase: str, generer_json: GenererJSON, journal=None, tour
 def enregistrer_pipeline(pipeline: dict) -> Path:
     dossier = registre.DOSSIER_UTILISATEUR / "pipelines"
     return ecrire_json(dossier / f"{pipeline['nom']}.json", pipeline)
+
+
+def nettoyer_page(page: str) -> str:
+    """Retire une clôture Markdown (```html … ```) que les modèles ajoutent souvent autour d'une page."""
+    page = page.strip()
+    page = re.sub(r"^```[a-zA-Z]*\s*", "", page)
+    page = re.sub(r"\s*```$", "", page)
+    return page.strip()
+
+
+def nettoyer_icone(icone: str) -> str:
+    """Un seul emoji ; sinon (URL, texte) une icône neutre."""
+    icone = (icone or "").strip()
+    return icone if 0 < len(icone) <= 4 and not icone.startswith("http") else "🧩"
 
 
 def nettoyer_nom(nom: str) -> str:

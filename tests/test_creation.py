@@ -169,3 +169,15 @@ def test_genre_page_ne_laisse_aucune_place_aux_services(dossier_utilisateur):
 def test_genre_service_exige_un_service_et_pas_de_page():
     schema = creation._schema_services()
     assert "page" not in schema["properties"] and schema["properties"]["services"]["minItems"] == 1
+
+
+def test_page_avec_cloture_markdown_et_icone_url(dossier_utilisateur):
+    """Cas réel (Mistral 7B) : page entourée de ```html … ``` dans le JSON, icône = URL."""
+    from forge import llm
+    brut = '{"nom": "metronome-local", "description": "x", "icone": "https://i.imgur.com/a.png", "page": "```html\\n<!DOCTYPE html>\\n<html lang=\'fr\'><body><h1>M</h1></body></html>\\n```"}'
+    assert json.loads(llm._extraire_json(brut))["nom"] == "metronome-local"
+    assert json.loads(llm._extraire_json("```json\n{\"a\": 1}\n```")) == {"a": 1}
+    spec = json.loads(brut)
+    r = creation.creer_brique("je veux un métronome", lambda c, s, sy: spec, genre="page")
+    m = registre.trouver_brique("metronome-local")
+    assert m.page.read_text(encoding="utf-8").startswith("<!DOCTYPE html>") and m.icone == "🧩" and r["tours"] == 1
