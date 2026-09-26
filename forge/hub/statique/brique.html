@@ -21,6 +21,16 @@
 
   <div id="bloc-page"></div>
 
+  <div class="carte" id="bloc-ameliorer" style="display:none;margin-top:18px">
+    <h3>Dis ce qui ne va pas</h3>
+    <p class="type" style="margin:0 0 8px">Le modèle reçoit la brique telle qu'elle est et ta remarque, la corrige, agentforge vérifie, et la nouvelle version remplace l'ancienne (gardée en sauvegarde). Ça recommence jusqu'à réussir.</p>
+    <textarea id="remarque" placeholder="ex. le bouton Démarrer ne fait rien · il n'y a pas de son · je veux pouvoir régler le tempo de 40 à 240"></textarea>
+    <div class="actions" style="margin-top:10px"><button class="principal" id="bouton-ameliorer" onclick="ameliorer()">Corriger</button><button id="annuler-amelioration" onclick="annulerAmelioration()" style="display:none">■ Annuler</button><small id="etat-amelioration"></small></div>
+    <div class="barre" id="barre-amelioration" style="display:none"><div id="barre-am"></div></div>
+    <div id="retour-amelioration" style="margin-top:8px"></div>
+    <div class="journal" id="journal-amelioration" style="display:none;margin-top:8px;max-height:300px"></div>
+  </div>
+
   <details style="margin-top:28px"><summary>Plus : appeler un service, dernière exécution, supprimer</summary>
     <h2>Services</h2>
     <div id="services"></div>
@@ -93,6 +103,7 @@ async function charger() {
     }
   }
 
+  document.getElementById("bloc-ameliorer").style.display = B.creee_depuis ? "" : "none";
   // page interactive (forme B)
   const blocPage = document.getElementById("bloc-page");
   blocPage.replaceChildren();
@@ -188,6 +199,34 @@ document.getElementById("formulaire-planification").addEventListener("submit", a
   try { await api(`/api/planification/${B.cible}`, { method: "POST", body: p }); } catch (e) { alert(texteErreur(e)); }
   charger();
 });
+
+let ameliorationEnCours = null;
+async function ameliorer() {
+  const remarque = document.getElementById("remarque").value.trim();
+  const retour = document.getElementById("retour-amelioration"); retour.replaceChildren();
+  try {
+    const r = await api(`/api/ameliorer/${NOM}`, { method: "POST", body: { remarque } });
+    ameliorationEnCours = r.id; document.getElementById("etat-amelioration").textContent = "remarque envoyée…"; suivreAmelioration();
+  } catch (e) { retour.replaceChildren(el("div", { class: "erreur" }, texteErreur(e))); }
+}
+async function annulerAmelioration() { if (ameliorationEnCours) await api(`/api/creations/${ameliorationEnCours}/annuler`, { method: "POST" }); }
+async function suivreAmelioration() {
+  if (!ameliorationEnCours) return;
+  const t = await api(`/api/creations/${ameliorationEnCours}`);
+  const bouton = document.getElementById("bouton-ameliorer"), etat = document.getElementById("etat-amelioration"), barre = document.getElementById("barre-amelioration"), journal = document.getElementById("journal-amelioration"), retour = document.getElementById("retour-amelioration");
+  document.getElementById("annuler-amelioration").style.display = t.etat === "en_cours" ? "" : "none";
+  if (t.etat === "en_cours") {
+    bouton.disabled = true; barre.style.display = ""; document.getElementById("barre-am").style.width = `${t.pourcentage}%`; etat.textContent = t.etape || "";
+    journal.style.display = ""; journal.textContent = (t.journal || []).join("\n"); journal.scrollTop = journal.scrollHeight;
+  } else if (t.etat === "termine" || t.etat === "echec" || t.etat === "annule") {
+    bouton.disabled = false; barre.style.display = "none"; etat.textContent = "";
+    retour.replaceChildren(t.etat === "termine" ? el("div", { class: "ok" }, t.etape) : el("div", { class: t.etat === "echec" ? "erreur" : "probleme" }, t.erreur_texte || t.etape));
+    journal.textContent = (t.journal || []).join("\n");
+    ameliorationEnCours = null;
+    if (t.etat === "termine") { const f = document.querySelector("#bloc-page iframe"); if (f) f.src = f.src; }
+  }
+}
+setInterval(suivreAmelioration, 1500);
 
 charger().catch(e => document.getElementById("retour").replaceChildren(el("div", { class: "erreur" }, texteErreur(e))));
 setInterval(() => { if (B && B.en_cours) charger(); }, 3000);

@@ -74,5 +74,21 @@ function nomContrat(schema) {
 // Le dock, comme en bas d'un iPhone : présent sur toutes les pages.
 function dockHTML(actif) {
   const items = [["accueil", "/", "🏠", "Accueil"], ["creer", "/creer", "✨", "Créer"], ["assembleur", "/assembleur", "🧩", "Assembler"], ["modele", "/brique/modele-local", "🧠", "Modèle"]];
-  return `<nav class="dock">${items.map(([id, url, ic, nom]) => `<a href="${url}" class="dock-item${id === actif ? " actif" : ""}" title="${nom}"><span class="dock-icone">${ic}</span><span class="dock-nom">${nom}</span></a>`).join("")}</nav>`;
+  return `<div class="bandeau-modele" id="bandeau-modele">🧠 modèle local : chargement…</div><nav class="dock">${items.map(([id, url, ic, nom]) => `<a href="${url}" class="dock-item${id === actif ? " actif" : ""}" title="${nom}"><span class="dock-icone">${ic}</span><span class="dock-nom">${nom}</span></a>`).join("")}</nav>`;
 }
+
+// Bandeau au-dessus du dock : les modèles Texte et Code actifs, changeables d'un clic sur toutes les pages.
+async function rafraichirBandeauModele() {
+  const b = document.getElementById("bandeau-modele"); if (!b) return;
+  try {
+    const r = await api("/api/appeler/modele-local/etat", { method: "POST", body: {} });
+    const e = r.resultat; const modeles = e.modeles || [];
+    const choix = (role, actif) => { const s = document.createElement("select"); s.className = "choix-modele"; s.title = `modèle ${role}`;
+      s.append(...modeles.map(m => { const o = document.createElement("option"); o.value = m; o.textContent = m; o.selected = m === actif; return o; }));
+      if (!actif || !modeles.includes(actif)) { const o = document.createElement("option"); o.value = ""; o.textContent = "— aucun —"; o.selected = true; s.prepend(o); }
+      s.onchange = async () => { if (!s.value) return; await api("/api/appeler/modele-local/choisir_modele", { method: "POST", body: { nom: s.value, role } }); rafraichirBandeauModele(); };
+      return s; };
+    b.replaceChildren("🧠 ", el("span", { class: "sourd" }, e.pret ? "" : (e.explication || "pas prêt") + " · "), "Texte ", choix("texte", e.modele_actif), " Code ", choix("code", e.modele_code), el("a", { href: "/brique/modele-local", class: "sourd", style: "margin-left:8px" }, "+ télécharger"));
+  } catch (err) { b.textContent = "🧠 modèle local : " + (err.forge ? err.forge.cause : err.message); }
+}
+document.addEventListener("DOMContentLoaded", rafraichirBandeauModele);

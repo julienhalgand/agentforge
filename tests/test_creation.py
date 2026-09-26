@@ -182,3 +182,21 @@ def test_page_avec_cloture_markdown_et_icone_url(dossier_utilisateur):
     r = creation.creer_brique("je veux un métronome", lambda c, s, sy: spec, genre="page")
     m = registre.trouver_brique("metronome-local")
     assert m.page.read_text(encoding="utf-8").startswith("<!DOCTYPE html>") and m.icone == "🧩" and r["tours"] == 1
+
+
+def test_ameliorer_une_brique_page(dossier_utilisateur):
+    spec1 = {"nom": "metronome", "description": "Un métronome.", "icone": "🎵", "page": "<!doctype html><html lang='fr'><body><h1>Métronome</h1></body></html>"}
+    creation.creer_brique("je veux un métronome", lambda c, s, sy: spec1, genre="page")
+    demandes = []
+
+    def modele(consigne, schema, systeme):
+        demandes.append(consigne)
+        return {"nom": "autre-nom", "description": "Un métronome avec son.", "icone": "🎵", "page": "<!doctype html><html lang='fr'><body><h1>Métronome</h1><button>Son</button></body></html>"}
+
+    journal = []
+    r = creation.ameliorer_brique("metronome", "il n'y a pas de son", modele, journal=journal.append)
+    assert r["nom"] == "metronome" and r["tours"] == 1
+    assert "il n'y a pas de son" in demandes[0] and "<h1>Métronome</h1>" in demandes[0]  # la brique actuelle est envoyée
+    m = registre.trouver_brique("metronome")
+    assert "<button>Son</button>" in m.page.read_text(encoding="utf-8")
+    assert list((m.dossier / "page" / ".sauvegardes").glob("index.html.*"))  # l'ancienne page est gardée

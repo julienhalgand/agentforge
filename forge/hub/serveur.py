@@ -328,6 +328,20 @@ class Requete(BaseHTTPRequestHandler):
                     raise ErreurForge(f"genre inconnu : {genre}", "page, service, composer ou auto")
                 threading.Thread(target=_demander_en_tache, args=(identifiant, phrase, genre), daemon=True).start()
                 return self._json({"ok": True, "id": identifiant})
+            if parties[:2] == ["api", "ameliorer"] and len(parties) == 3:
+                corps = self._corps_json()
+                remarque = (corps.get("remarque") or "").strip()
+                if len(remarque) < 4:
+                    raise ErreurForge("dis ce qui ne va pas, en une phrase", "ex. « le son ne marche pas » ou « le bouton démarrer ne fait rien »")
+                with VERROU_DEMANDE:
+                    en_cours = DEMANDE_EN_COURS["id"]
+                    if en_cours and mod_taches.lire_etat(DOSSIER_CREATIONS, en_cours).get("etat") == "en_cours":
+                        return self._json({"ok": True, "id": en_cours, "deja_en_cours": True, "message": "une demande est déjà en cours"})
+                    identifiant = f"amelioration-{int(time.time() * 1000)}"
+                    DEMANDE_EN_COURS["id"] = identifiant
+                    mod_taches.Tache(DOSSIER_CREATIONS, identifiant).demarrer("remarque reçue")
+                threading.Thread(target=_ameliorer_en_tache, args=(identifiant, parties[2], remarque), daemon=True).start()
+                return self._json({"ok": True, "id": identifiant})
             if chemin == "/api/composer":
                 corps = self._corps_json()
                 phrase = (corps.get("phrase") or "").strip()
@@ -442,6 +456,29 @@ def _demander_en_tache(identifiant: str, phrase: str, genre: str = "auto") -> No
         else:
             tache.echouer(exc.texte())
     except Exception as exc:  # jamais un fil mort sans explication
+        tache.echouer(f"erreur interne : {exc}\n" + "\n".join(traceback.format_exc().splitlines()[-8:]))
+
+
+def _ameliorer_en_tache(identifiant: str, brique: str, remarque: str) -> None:
+    tache = mod_taches.Tache(DOSSIER_CREATIONS, identifiant)
+    etapes: list[str] = []
+
+    def journal(message: str) -> None:
+        etapes.append(f"{time.strftime('%H:%M:%S')} {message}")
+        ecrire_json(DOSSIER_CREATIONS / f"{identifiant}.journal.json", etapes, sauvegarder=False)
+        tache.progres(min(92, 8 * len(etapes)), message, force=True)
+
+    try:
+        journal(f"remarque sur « {brique} » : « {remarque} »")
+        resultat = mod_creation.ameliorer_brique(brique, remarque, _generer_json_code, journal=journal, annulee=tache.annulee)
+        ecrire_json(DOSSIER_CREATIONS / f"{identifiant}.resultat.json", {"action": "ameliorer", **resultat, "journal": etapes}, sauvegarder=False)
+        tache.terminer(resultat["dossier"], etape=f"brique « {resultat['nom']} » mise à jour")
+    except ErreurForge as exc:
+        if tache.annulee():
+            tache.annuler("amélioration annulée")
+        else:
+            tache.echouer(exc.texte())
+    except Exception as exc:
         tache.echouer(f"erreur interne : {exc}\n" + "\n".join(traceback.format_exc().splitlines()[-8:]))
 
 

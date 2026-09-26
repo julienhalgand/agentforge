@@ -197,3 +197,10 @@ main:not(.ecran-iphone) .type, main:not(.ecran-iphone) .desc { color: var(--sour
 .entete-detail h1, .entete-detail .type, #actions-brique > p, #actions > p { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
 .entete-detail .etat { color: rgba(255,255,255,.85); }
 @media (max-width: 480px) { .grille-icones { gap: 18px 8px; } .dock { gap: 14px; padding: 10px 14px; } .dock-icone { width: 50px; height: 50px; font-size: 24px; } }
+
+/* bandeau modèle au-dessus du dock */
+.bandeau-modele { position: fixed; left: 50%; bottom: 116px; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; background: rgba(0,0,0,.45); color: #fff; font-size: 13px; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); z-index: 19; max-width: 96vw; white-space: nowrap; }
+.bandeau-modele .sourd { color: rgba(255,255,255,.7); } .bandeau-modele a { color: #fff; }
+.choix-modele { width: auto; padding: 4px 26px 4px 8px; font-size: 13px; background-color: rgba(255,255,255,.15); color: #fff; border-radius: 999px; }
+.choix-modele option { color: #111; }
+main:not(.ecran-iphone), main.ecran-iphone { padding-bottom: 170px; }

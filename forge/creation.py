@@ -499,3 +499,94 @@ def decider(phrase: str, generer_json: GenererJSON) -> dict:
     if d.get("action") not in ("composer", "creer"):
         raise ErreurForge("décision inutilisable", "réessayez")
     return d
+
+
+# --- améliorer une brique existante à partir d'une remarque ---------------------------------
+
+def _spec_depuis_brique(m: mod_manifeste.Manifeste) -> tuple[dict, str]:
+    """Reconstruit la spécification (telle que le modèle l'a rendue) depuis une brique installée. Rend (spec, genre)."""
+    spec: dict = {"nom": m.nom, "description": m.description, "icone": m.icone, "services": []}
+    if m.page and m.page.exists():
+        spec["page"] = m.page.read_text(encoding="utf-8")
+        return spec, "page"
+    module = m.dossier / _nom_module(m.nom)
+    code_services = (module / "services.py").read_text(encoding="utf-8") if (module / "services.py").exists() else ""
+    for s in m.services:
+        entree = schemas.resoudre(s.entree)
+        champs = [{"nom": k, "type": v.get("type", "string"), "description": v.get("description", ""), "obligatoire": k in entree.get("required", [])} for k, v in entree.get("properties", {}).items()]
+        if isinstance(s.sortie, str):
+            sortie = {"contrat": s.sortie}
+        else:
+            sortie = {"contrat": "champs", "champs": [{"nom": k, "type": v.get("type", "string"), "description": v.get("description", "")} for k, v in s.sortie.get("properties", {}).items()]}
+        debut = code_services.find(f"# --- {s.nom} :")
+        fin = code_services.find("# --- ", debut + 5) if debut >= 0 else -1
+        bloc = code_services[debut:fin if fin > 0 else None] if debut >= 0 else ""
+        code = "\n".join(l for l in bloc.splitlines()[1:]).replace(f"def executer_{s.nom}(", "def executer(", 1).strip() + "\n"
+        spec["services"].append({"nom": s.nom, "description": s.description, "entree": champs, "sortie": sortie, "exemple": s.exemple or {}, "code": code})
+    return spec, "service"
+
+
+def ameliorer_brique(nom: str, remarque: str, generer_json: GenererJSON, journal=None, annulee=None) -> dict:
+    """La brique actuelle + la remarque de l'utilisateur → une version corrigée, vérifiée, qui remplace l'ancienne
+    (l'ancienne page ou l'ancien code partent en .sauvegardes/). Recommence jusqu'à réussir."""
+    import itertools
+
+    journal = journal or (lambda _m: None)
+    annulee = annulee or (lambda: False)
+    m = registre.trouver_brique(nom)
+    if registre.RACINE_DEPOT in m.dossier.parents:
+        raise ErreurForge(f"{nom} est une brique livrée avec agentforge", "on ne modifie par une phrase que les briques créées par une phrase")
+    spec, genre = _spec_depuis_brique(m)
+    phrase = m.brut.get("creee_depuis", m.description)
+    if genre == "page":
+        schema, systeme = SCHEMA_PAGE, SYSTEME_PAGE
+    else:
+        schema, systeme = _schema_services(), SYSTEME_BRIQUE
+    consigne = (
+        f"Voici une brique existante, créée pour : « {phrase} ».\n{json.dumps(spec, ensure_ascii=False)}\n\n"
+        f"L'utilisateur dit ce qui ne va pas : « {remarque} ».\n\n"
+        "Corrige la brique en conséquence, garde ce qui marche, et renvoie-la complète."
+    )
+    dernier_probleme = ""
+    proposition = None
+    for tour in itertools.count(1):
+        if annulee():
+            raise ErreurForge("amélioration annulée", "relance quand tu veux")
+        journal(f"tour {tour} : le modèle {'corrige' if dernier_probleme else 'améliore'} la brique")
+        demande = consigne if not dernier_probleme else consigne + f"\n\nTa proposition précédente :\n{json.dumps(proposition, ensure_ascii=False)}\n\nElle a échoué :\n{dernier_probleme}\n\nCorrige-la."
+        try:
+            proposition = generer_json(demande, schema, systeme)
+            if genre == "page":
+                proposition = {**proposition, "services": []}
+            proposition = {**proposition, "nom": m.nom}  # le nom ne change pas : la tuile reste la même
+        except ErreurForge as exc:
+            dernier_probleme = exc.texte()
+            journal(f"réponse inutilisable : {exc.cause}")
+            for d in exc.details[:4]:
+                journal("  → " + d[:700])
+            continue
+        temporaire = Path(tempfile.mkdtemp(prefix="brique-", dir=str(registre.DOSSIER_UTILISATEUR)))
+        try:
+            journal("vérification de la nouvelle version")
+            nouveau = gabarit(proposition, phrase, temporaire)
+            echecs = _essai(nouveau, journal)
+            if echecs:
+                dernier_probleme = "\n".join(echecs)
+                for e in echecs[:3]:
+                    journal("échec à l'essai : " + e[:220])
+                continue
+            # remplacement fichier par fichier, l'ancien contenu sauvegardé
+            for fichier in sorted(p for p in temporaire.rglob("*") if p.is_file()):
+                cible = m.dossier / fichier.relative_to(temporaire)
+                from .utils.fichiers import ecrire_atomique
+                ecrire_atomique(cible, fichier.read_bytes(), sauvegarder=True)
+            journal(f"brique « {m.nom} » mise à jour (ancienne version dans .sauvegardes/)")
+            return {"nom": m.nom, "dossier": str(m.dossier), "tours": tour, "spec": proposition}
+        except ErreurForge as exc:
+            dernier_probleme = exc.texte()
+            journal(f"refusée : {exc.cause}")
+            for d in exc.details[:4]:
+                journal("  → " + d[:220])
+        finally:
+            shutil.rmtree(temporaire, ignore_errors=True)
+    raise ErreurForge("amélioration arrêtée", "")
