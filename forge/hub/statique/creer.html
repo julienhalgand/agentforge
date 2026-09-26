@@ -36,19 +36,24 @@
 <script>document.body.insertAdjacentHTML("beforeend", dockHTML("creer"));</script>
 <script>
 function exemple(id, texte) { document.getElementById(id).value = texte; }
-let creationEnCours = localStorage.getItem("creation-en-cours") || null;
+let creationEnCours = localStorage.getItem("creation-en-cours") || null, lecturesVides = 0;
 
 async function demander() {
   const phrase = document.getElementById("phrase").value.trim();
   const bouton = document.getElementById("demander"), retour = document.getElementById("retour");
   localStorage.removeItem("creation-en-cours"); creationEnCours = null;
   bouton.disabled = true; retour.replaceChildren();
+  document.getElementById("etat").textContent = "demande envoyée au hub…";
+  document.getElementById("barre-creation").style.display = ""; document.getElementById("barre").style.width = "3%";
+  document.getElementById("journal-direct").style.display = ""; document.getElementById("journal-direct").textContent = new Date().toLocaleTimeString("fr-FR") + " envoi de la demande…";
   try {
     const r = await api("/api/demander", { method: "POST", body: { phrase } });
     creationEnCours = r.id; localStorage.setItem("creation-en-cours", r.id);
+    if (r.deja_en_cours) document.getElementById("etat").textContent = r.message;
     suivre();
-  } catch (e) { retour.replaceChildren(el("div", { class: "erreur" }, texteErreur(e))); bouton.disabled = false; }
+  } catch (e) { retour.replaceChildren(el("div", { class: "erreur" }, texteErreur(e))); bouton.disabled = false; document.getElementById("etat").textContent = ""; document.getElementById("barre-creation").style.display = "none"; }
 }
+api("/api/etat").then(e => { const s = document.createElement("small"); s.style.cssText = "display:block;margin:12px 0 0;color:var(--sourd)"; s.textContent = `hub démarré à ${e.hub_demarre_a || "?"} — après un git pull : Ctrl+C dans la fenêtre du hub, puis python -m forge hub`; document.querySelector("main .carte").append(s); }).catch(() => {});
 
 function resultatTermine(t) {
   const d = t.resultat_detail || {};
@@ -75,7 +80,13 @@ async function suivre() {
     retour.replaceChildren(el("div", { class: "probleme" }, "Création annulée."));
     localStorage.removeItem("creation-en-cours"); creationEnCours = null; return;
   }
-  if (t.etat === "en_attente" || t.etat === "illisible") { localStorage.removeItem("creation-en-cours"); creationEnCours = null; bouton.disabled = false; return; }
+  if (t.etat === "en_attente" || t.etat === "illisible") {  // état pas encore écrit : on patiente, on ne renonce qu'après 8 lectures vides (≈ 12 s)
+    lecturesVides += 1;
+    etat.textContent = `en attente du hub… (${lecturesVides})`;
+    if (lecturesVides >= 8) { localStorage.removeItem("creation-en-cours"); creationEnCours = null; bouton.disabled = false; etat.textContent = ""; retour.replaceChildren(el("div", { class: "erreur" }, "Le hub n'a jamais écrit l'état de cette demande. Est-il bien relancé après le git pull (Ctrl+C puis python -m forge hub) ?")); }
+    return;
+  }
+  lecturesVides = 0;
   if (t.etat === "en_cours") {
     bouton.disabled = true; barre.style.display = ""; document.getElementById("barre").style.width = `${t.pourcentage}%`;
     const depuis = Math.max(0, Math.round((Date.now() - (t.mis_a_jour_ms || Date.now())) / 1000));

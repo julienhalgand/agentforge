@@ -84,6 +84,7 @@ def _etat_global() -> dict:
         "journal": list(PLANIFICATEUR.journal_courant[-30:]),
         "problemes": problemes + problemes_p,
         "dossier_utilisateur": str(registre.DOSSIER_UTILISATEUR),
+        "hub_demarre_a": DEMARRE_A,
     }
 
 
@@ -315,7 +316,13 @@ class Requete(BaseHTTPRequestHandler):
                 phrase = (corps.get("phrase") or "").strip()
                 if len(phrase) < 6:
                     raise ErreurForge("dis ce que tu veux, en une phrase", "ex. « je veux un métronome » ou « chaque matin, le prix du bitcoin et un rapport »")
-                identifiant = f"demande-{int(time.time())}"
+                with VERROU_DEMANDE:
+                    en_cours = DEMANDE_EN_COURS["id"]
+                    if en_cours and mod_taches.lire_etat(DOSSIER_CREATIONS, en_cours).get("etat") == "en_cours":
+                        return self._json({"ok": True, "id": en_cours, "deja_en_cours": True, "message": "une demande est déjà en cours : je te montre celle-là"})
+                    identifiant = f"demande-{int(time.time() * 1000)}"
+                    DEMANDE_EN_COURS["id"] = identifiant
+                    mod_taches.Tache(DOSSIER_CREATIONS, identifiant).demarrer("demande reçue")
                 threading.Thread(target=_demander_en_tache, args=(identifiant, phrase), daemon=True).start()
                 return self._json({"ok": True, "id": identifiant})
             if chemin == "/api/composer":
@@ -372,6 +379,9 @@ class Requete(BaseHTTPRequestHandler):
 
 
 DOSSIER_CREATIONS = registre.DOSSIER_UTILISATEUR / "creations"
+DEMANDE_EN_COURS: dict = {"id": None}
+VERROU_DEMANDE = threading.Lock()
+DEMARRE_A = time.strftime("%H:%M:%S")
 
 
 def _generer_json_modele(consigne: str, schema: dict, systeme: str):
