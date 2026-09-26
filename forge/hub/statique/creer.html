@@ -28,7 +28,8 @@
       <button onclick="exemple('phrase', 'me donner la météo de Nantes pour les 3 prochains jours')">météo</button>
       <button onclick="exemple('phrase', 'convertir un montant en euros vers une autre devise au cours du jour')">devises</button>
     </div>
-    <div class="actions" style="margin-top:12px"><button class="principal" id="demander" onclick="demander()">C'est parti</button><small id="etat"></small></div>
+    <div class="actions" style="margin-top:12px"><button class="principal" id="demander" onclick="demander()">C'est parti</button><button id="annuler" onclick="annuler()" style="display:none">■ Annuler</button><small id="etat"></small></div>
+    <small id="avertissement" style="display:none;margin-top:6px">Avec le petit modèle par défaut, chaque tour peut prendre plusieurs minutes sur processeur. Pour aller plus vite et mieux : un modèle 3B ou 7B dans <a href="/brique/modele-local">Modèle local</a>.</small>
     <div class="barre" id="barre-creation" style="display:none"><div id="barre"></div></div>
     <div class="journal" id="journal-direct" style="display:none;margin-top:10px"></div>
     <div id="retour" style="margin-top:10px"></div>
@@ -67,6 +68,13 @@ async function suivre() {
   const t = await api(`/api/creations/${creationEnCours}`);
   const bouton = document.getElementById("demander"), etat = document.getElementById("etat"), retour = document.getElementById("retour"), barre = document.getElementById("barre-creation");
   const direct = document.getElementById("journal-direct");
+  document.getElementById("annuler").style.display = t.etat === "en_cours" ? "" : "none";
+  document.getElementById("avertissement").style.display = t.etat === "en_cours" ? "block" : "none";
+  if (t.etat === "annule") {
+    bouton.disabled = false; barre.style.display = "none"; etat.textContent = ""; document.getElementById("journal-direct").style.display = "none";
+    retour.replaceChildren(el("div", { class: "probleme" }, "Création annulée."));
+    localStorage.removeItem("creation-en-cours"); creationEnCours = null; return;
+  }
   if (t.etat === "en_cours") {
     bouton.disabled = true; barre.style.display = ""; document.getElementById("barre").style.width = `${t.pourcentage}%`;
     const depuis = Math.max(0, Math.round((Date.now() - (t.mis_a_jour_ms || Date.now())) / 1000));
@@ -87,6 +95,7 @@ async function suivre() {
     localStorage.removeItem("creation-en-cours"); creationEnCours = null;
   }
 }
+async function annuler() { if (creationEnCours) await api(`/api/creations/${creationEnCours}/annuler`, { method: "POST" }); }
 suivre(); setInterval(suivre, 1500);
 </script>
 </body>

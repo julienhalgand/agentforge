@@ -240,7 +240,7 @@ def serveur_en_marche() -> dict | None:
     return None
 
 
-def demarrer_serveur(modele: str, gpu: bool, port: int | None = None, contexte: int = 4096, attente_s: float = 120.0) -> dict:
+def demarrer_serveur(modele: str, gpu: bool, port: int | None = None, contexte: int = 8192, attente_s: float = 120.0) -> dict:
     """Lance le moteur ; si la variante GPU ne démarre pas, réinstalle la variante CPU et réessaie une fois."""
     try:
         return _demarrer_serveur(modele, gpu, port, contexte, attente_s)

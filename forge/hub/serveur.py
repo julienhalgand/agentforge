@@ -300,6 +300,15 @@ class Requete(BaseHTTPRequestHandler):
                 identifiant = f"creation-{int(time.time())}"
                 threading.Thread(target=_creer_brique_en_tache, args=(identifiant, phrase), daemon=True).start()
                 return self._json({"ok": True, "id": identifiant})
+            if parties[:2] == ["api", "creations"] and len(parties) == 4 and parties[3] == "annuler":
+                mod_taches.poser_annulation(DOSSIER_CREATIONS, parties[2])
+                try:  # arrêter le moteur interrompt la génération en cours ; il redémarrera à la prochaine demande
+                    m = registre.trouver_brique("modele-local")
+                    with ClientMCP(m.commande_serveur(), m.dossier) as client:
+                        client.appeler("arreter", {})
+                except ErreurForge:
+                    pass
+                return self._json({"ok": True})
             if chemin == "/api/demander":
                 corps = self._corps_json()
                 phrase = (corps.get("phrase") or "").strip()
@@ -392,11 +401,14 @@ def _creer_brique_en_tache(identifiant: str, phrase: str) -> None:
 
     try:
         journal(f"demande : « {phrase} »")
-        resultat = mod_creation.creer_brique(phrase, _generer_json_modele, journal=journal)
+        resultat = mod_creation.creer_brique(phrase, _generer_json_modele, journal=journal, annulee=tache.annulee)
         etat = tache.terminer(resultat["dossier"], etape=f"brique « {resultat['nom']} » créée et testée")
         ecrire_json(DOSSIER_CREATIONS / f"{identifiant}.resultat.json", {**resultat, "journal": etapes}, sauvegarder=False)
     except ErreurForge as exc:
-        tache.echouer(exc.texte())
+        if tache.annulee():
+            tache.annuler("création annulée")
+        else:
+            tache.echouer(exc.texte())
 
 
 def _preparer_briques() -> None:

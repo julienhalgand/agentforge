@@ -258,9 +258,10 @@ def _essai(m: mod_manifeste.Manifeste, journal=None) -> list[str]:
     return echecs
 
 
-def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: int = 3, installer: bool = True) -> dict:
+def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: int = 3, installer: bool = True, annulee=None) -> dict:
     """Une phrase → une brique installée et testée. Rend {nom, dossier, tours, spec} ou lève une ErreurForge détaillée."""
     journal = journal or (lambda _m: None)
+    annulee = annulee or (lambda: False)
     consigne = (
         f"Décris une brique qui fait ceci : « {phrase} ».\n\n"
         f"Contrats de sortie existants (préfère-les quand ils correspondent, sinon \"champs\") :\n{_catalogue_contrats()}\n\n"
@@ -269,6 +270,8 @@ def creer_brique(phrase: str, generer_json: GenererJSON, journal=None, tours: in
     dernier_probleme = ""
     spec = None
     for tour in range(1, tours + 1):
+        if annulee():
+            raise ErreurForge("création annulée", "relance quand tu veux")
         journal(f"tour {tour}/{tours} : le modèle {'corrige' if dernier_probleme else 'écrit'} la brique (nom, services, code) — cette étape est la plus longue")
         demande = consigne if not dernier_probleme else (
             consigne + f"\n\nTa proposition précédente était :\n{json.dumps(spec, ensure_ascii=False)}\n\n"
