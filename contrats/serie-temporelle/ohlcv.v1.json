@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "forge://serie-temporelle/ohlcv@1",
+  "title": "Bougies OHLCV",
+  "description": "Série de bougies. Chaque bougie est un tableau [horodatage_ms, ouverture, plus_haut, plus_bas, cloture, volume], compatible avec la sortie « historique » de prix-agent.",
+  "type": "object",
+  "required": ["actif", "intervalle", "bougies"],
+  "properties": {
+    "actif": { "type": "string", "description": "Identifiant de l'actif, ex. BTC" },
+    "devise": { "type": "string", "default": "USD", "description": "Devise de cotation" },
+    "intervalle": { "type": "string", "enum": ["1m", "5m", "15m", "1h", "4h", "1d", "1w"] },
+    "source": { "type": "string", "description": "Source ayant fourni les données (binance, coingecko, test…)" },
+    "bougies": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "minItems": 6,
+        "maxItems": 6,
+        "items": { "type": "number" },
+        "description": "[horodatage_ms, ouverture, plus_haut, plus_bas, cloture, volume]"
+      }
+    },
+    "manques": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Ce qui n'a pas pu être obtenu, élément par élément (réponse partielle)"
+    }
+  }
+}

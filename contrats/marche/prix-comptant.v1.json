@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "forge://marche/prix-comptant@1",
+  "title": "Prix comptant",
+  "description": "Prix comptant d'un ou plusieurs actifs dans une devise, avec la source de chaque prix et la liste des manques.",
+  "type": "object",
+  "required": ["devise", "horodatage_ms", "prix"],
+  "properties": {
+    "devise": { "type": "string" },
+    "horodatage_ms": { "type": "integer" },
+    "prix": {
+      "type": "object",
+      "description": "actif → { valeur, source }",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["valeur", "source"],
+        "properties": {
+          "valeur": { "type": "number" },
+          "source": { "type": "string" }
+        }
+      }
+    },
+    "manques": { "type": "array", "items": { "type": "string" } }
+  }
+}

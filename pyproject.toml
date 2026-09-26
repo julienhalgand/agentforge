@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentforge"
+version = "0.1.0"
+description = "Relier des briques (applications et agents locaux) par un protocole unique, en local, sans cloud."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+# Aucune dépendance obligatoire : tout le cœur tient sur la bibliothèque standard.
+# certifi est utilisé s'il est présent (repli SSL sous Windows), jamais imposé.
+dependencies = []
+
+[project.optional-dependencies]
+ssl = ["certifi"]
+test = ["pytest"]
+
+[project.scripts]
+forge = "forge.cli:principal"
+
+[tool.setuptools.packages.find]
+include = ["forge*"]
+
+[tool.setuptools.package-data]
+"forge.hub" = ["statique/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

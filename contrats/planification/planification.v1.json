@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "forge://planification/planification@1",
+  "title": "Planification d'une brique ou d'un pipeline",
+  "description": "quotidien à HH:MM, toutes les N heures, ou jamais (à la demande). Exécutions séquentielles, rattrapage au démarrage, verrou anti-doublon.",
+  "type": "object",
+  "required": [
+    "mode"
+  ],
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": [
+        "quotidien",
+        "toutes_les_n_heures",
+        "jamais"
+      ]
+    },
+    "heure": {
+      "type": "string",
+      "pattern": "^\\d{2}:\\d{2}$",
+      "description": "Pour le mode quotidien"
+    },
+    "heures": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Pour le mode toutes_les_n_heures"
+    },
+    "rattrapage": {
+      "type": "boolean",
+      "default": true,
+      "description": "Exécuter au démarrage si une occurrence a été manquée"
+    },
+    "service": {
+      "type": "string",
+      "description": "Pour une brique : service à exécuter (défaut : le premier)"
+    },
+    "entree": {
+      "type": "object",
+      "description": "Pour une brique : paramètres du service (défaut : son exemple)"
+    }
+  }
+}

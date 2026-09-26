@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "forge://tache/progres@1",
+  "title": "Progrès d'une tâche longue",
+  "description": "Contenu de <tache>.progres.json, réécrit au plus une fois par seconde. L'état vit sur le disque, jamais dans l'onglet. L'annulation est coopérative : un fichier <tache>.annuler posé par la page, consulté par la tâche à chaque bloc.",
+  "type": "object",
+  "required": ["tache", "etat", "pourcentage", "mis_a_jour_ms"],
+  "properties": {
+    "tache": { "type": "string" },
+    "etat": { "type": "string", "enum": ["en_attente", "en_cours", "termine", "echec", "annule"] },
+    "pourcentage": { "type": "number", "minimum": 0, "maximum": 100 },
+    "etape": { "type": "string" },
+    "eta_s": { "type": "number", "description": "Temps restant estimé en secondes" },
+    "mis_a_jour_ms": { "type": "integer" },
+    "resultat": { "type": "string", "description": "Chemin du résultat final quand etat = termine" },
+    "erreur": { "type": "string", "description": "Chemin de <tache>.erreur.txt quand etat = echec" }
+  }
+}
