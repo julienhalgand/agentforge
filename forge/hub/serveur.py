@@ -184,6 +184,7 @@ class Requete(BaseHTTPRequestHandler):
     def _json(self, donnees, code: int = 200) -> None:
         corps = json.dumps(donnees, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
+        self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(corps)))
         self.end_headers()
@@ -207,6 +208,7 @@ class Requete(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", type_mime)
         self.send_header("Content-Length", str(len(corps)))
+        self.send_header("Cache-Control", "no-store")  # jamais une vieille page après un git pull
         self.end_headers()
         self.wfile.write(corps)
 

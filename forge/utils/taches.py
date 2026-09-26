@@ -88,9 +88,11 @@ class Tache:
         self._ecrire("termine", 100.0, etape, resultat=str(resultat) if resultat else None, force=True)
         return self._lire()
 
-    def echouer(self, cause: str, etape: str = "échec") -> dict:
+    def echouer(self, cause: str, etape: str | None = None) -> dict:
+        """La cause va dans <nom>.erreur.txt ET dans l'étape : toute page qui affiche l'étape montre le pourquoi."""
         ecrire_atomique(self.fichier_erreur, cause + "\n", sauvegarder=False)
-        self._ecrire("echec", self._lire().get("pourcentage", 0.0), etape, erreur=self.fichier_erreur.name, force=True)
+        premiere_ligne = cause.strip().splitlines()[0] if cause.strip() else "échec"
+        self._ecrire("echec", self._lire().get("pourcentage", 0.0), etape or premiere_ligne, erreur=self.fichier_erreur.name, force=True)
         return self._lire()
 
     # --- lecture ------------------------------------------------------------
